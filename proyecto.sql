@@ -30,6 +30,12 @@ create sequence codigo_asiento
 	start with 100
 	increment by 1;
 
+create sequence codigo_inventario
+	start with 1
+	increment by 1;
+
+
+
 --------------------fin secuencias---------------------------
 
 create table artista(
@@ -100,6 +106,58 @@ create table asiento(
 	
 	foreign key (id_lugar) references lugar(id)
 )
+
+create table inventario(
+	id varchar primary key,
+	cantidad_disponible numeric,
+	cantidad_vendidos numeric,
+	cantidad_reservados numeric,
+	id_lugar varchar,
+	id_evento varchar,
+	
+	foreign key(id_lugar) references lugar(id),
+	foreign key(id_evento) references evento(id)
+)
+
+create table ticket(
+	id varchar primary key,
+	fecha_compra date,
+	descuento numeric,
+	precio numeric,
+	precio_descuento numeric,
+	id_asiento varchar,
+	id_cliente varchar,
+	id_evento varchar,
+	
+	foreign key(id_asiento) references asiento(id),
+	foreign key(id_cliente) references cliente(id),
+	foreign key(id_evento) references evento(id)
+)
+
+create table metodo_pago(
+	id varchar primary key,
+	tipo_pago check (tipo_pago in ('efectivo', 'efectivo y tarjeta de credito', 'efectivo y tarjeta de credito conciertosya', 'tarjeta de credito y tarjeta conciertosya')
+)
+
+create table factura(
+	id varchar primary key,
+	fecha_emision date,
+	total numeric,
+	id_metodo_pago varchar,
+	id_cliente varchar,
+	detalle xml,
+	foreign key (id_cliente) references cliente(id),
+	foreign key (id_metodo_pago) references metodo_pago(id)
+)
+
+CREATE TABLE ocupacion_asientos (
+    id_asiento VARCHAR,
+    id_evento VARCHAR,
+    estado VARCHAR CHECK (estado IN ('disponible', 'reservado', 'vendido')),
+    PRIMARY KEY (id_asiento, id_evento),
+    FOREIGN KEY (id_asiento) REFERENCES asiento(id),
+    FOREIGN KEY (id_evento) REFERENCES evento(id)
+);
 
 ----- fin creacion de tablas ---------------------------------------
 
@@ -258,75 +316,134 @@ END $$;
 call insertar_clientes();
 select * from cliente;
 
-
 CREATE OR REPLACE PROCEDURE insertar_asientos()
 LANGUAGE plpgsql AS $$
 DECLARE
-    lugar_cursor cursor for
-        select id, capacidad from lugar;
-	id_lugar_v varchar;
-	capacidad_lugar_v int;
+    lugar_cursor CURSOR FOR 
+        SELECT id, capacidad FROM lugar;
+    id_lugar_v VARCHAR;
+    capacidad_lugar_v INT;
     capacidad_actual INT;
     fila CHAR;
     columna INT;
     tipo_asiento TEXT;
     estado_asiento TEXT[] := ARRAY['disponible', 'reservado', 'vendido'];
+    eventos RECORD;
+    estado_seleccionado TEXT;
 BEGIN
-    open lugar_cursor;
-	loop
-		fetch lugar_cursor into id_lugar_v, capacidad_lugar_v;
-		exit when not found; -- Recorremos los lugares existentes
-        fila := 'A'; -- Inicia en la fila 'A'
-        columna := 1; -- Inicia en la columna 1
+    OPEN lugar_cursor;
+    LOOP
+        FETCH lugar_cursor INTO id_lugar_v, capacidad_lugar_v;
+        EXIT WHEN NOT FOUND;
+        
+        FOR eventos IN SELECT * FROM evento WHERE lugar_id = id_lugar_v LOOP
+            fila := 'A'; 
+            columna := 1; 
+        
+            FOR i IN 1..capacidad_lugar_v LOOP
+                -- Determinar tipo de asiento según posición
+                IF i <= capacidad_lugar_v * 0.1 THEN
+                    tipo_asiento := 'palco'; -- 10% primeros asientos son "palco"
+                ELSIF i <= capacidad_lugar_v * 0.3 THEN
+                    tipo_asiento := 'vip'; -- 20% siguientes asientos son "vip"
+                ELSE
+                    tipo_asiento := 'general'; -- El resto son "general"
+                END IF;
 
-        FOR i IN 1..capacidad_lugar_v LOOP
-            -- Determinar tipo de asiento según posición
-            IF i <= capacidad_lugar_v * 0.1 THEN
-                tipo_asiento := 'palco'; -- 10% primeros asientos son "palco"
-            ELSIF i <= capacidad_lugar_v * 0.3 THEN
-                tipo_asiento := 'vip'; -- 20% siguientes asientos son "vip"
-            ELSE
-                tipo_asiento := 'general'; -- El 'palco'resto son "general"
-            END IF;
+                INSERT INTO asiento (id, codigo, fila, columna, precio, descuento, tipo, estado, id_lugar)
+                VALUES (
+                    nextval('id_asiento'), 
+                    nextval('codigo_asiento'), 
+                    fila, 
+                    columna, 
+                    (CASE tipo_asiento
+                        WHEN 'palco' THEN 50000
+                        WHEN 'vip' THEN 30000
+                        ELSE 20000
+                     END), -- Precio según tipo
+                    (CASE tipo_asiento
+                        WHEN 'palco' THEN 0.1
+                        WHEN 'vip' THEN 0.05
+                        ELSE 0
+                     END), -- Descuento según tipo
+                    tipo_asiento, 
+                    estado_asiento[TRUNC(RANDOM() * 3 + 1)::INT], 
+                    id_lugar_v
+                );
 
-            INSERT INTO asiento (id, codigo, fila, columna, precio, descuento, tipo, estado, id_lugar)
-            VALUES (
-                nextval('id_asiento'),
-                nextval('codigo_asiento'),
-                fila,
-                columna,
-                (CASE tipo_asiento
-                    WHEN 'palco' THEN 50000
-                    WHEN 'vip' THEN 30000
-                    ELSE 20000
-                 END), -- Precio según tipo
-                (CASE tipo_asiento
-                    WHEN 'palco' THEN 0.1
-                    WHEN 'vip' THEN 0.05
-                    ELSE 0
-                 END), -- Descuento según tipo
-                tipo_asiento, -- Tipo del asiento
-                estado_asiento[TRUNC(RANDOM() * 3 + 1)::INT], -- Estado aleatorio
-                id_lugar_v
-            );
+                -- Seleccionar el estado del asiento aleatoriamente
+                estado_seleccionado := estado_asiento[TRUNC(RANDOM() * 3 + 1)::INT];
 
-            columna := columna + 1;
-            IF columna > 10 THEN -- Asumimos 10 columnas por fila
-                columna := 1;
-                fila := CHR(ASCII(fila) + 1); -- Cambia a la siguiente fila ('A' -> 'B')
-            END IF;
+                INSERT INTO ocupacion_asientos (id_asiento, id_evento, estado)
+                VALUES (
+                    currval('id_asiento'), 
+                    eventos.id,  
+                    estado_seleccionado  
+                );
+
+                columna := columna + 1;
+                IF columna > 10 THEN 
+                    columna := 1;
+                    fila := CHR(ASCII(fila) + 1); 
+                END IF;
+            END LOOP;
         END LOOP;
     END LOOP;
-	close lugar_cursor;
+    CLOSE lugar_cursor;
 END $$;
 
+
 call insertar_asientos();
-select * from asiento;
 
+CREATE OR REPLACE PROCEDURE insertar_inventario()
+LANGUAGE plpgsql AS $$
+DECLARE
+    v_total_disponible INT;
+    v_total_vendido INT;
+    v_total_reservado INT;
+    v_lugar VARCHAR;
+    v_evento VARCHAR;
+BEGIN
+    FOR v_lugar IN SELECT id FROM lugar LOOP
 
+        FOR v_evento IN 
+            SELECT id FROM evento WHERE lugar_id = v_lugar LIMIT 2 LOOP
+
+            SELECT total_disponible, total_vendido, total_reservado
+            INTO v_total_disponible, v_total_vendido, v_total_reservado
+            FROM obtener_asientos(v_lugar, v_evento);
+
+            INSERT INTO inventario (id, cantidad_disponible, cantidad_vendidos, cantidad_reservados, id_lugar, id_evento) 
+            VALUES (nextval('codigo_inventario'), v_total_disponible, v_total_vendido, v_total_reservado, v_lugar, v_evento);
+        END LOOP;
+    END LOOP;
+END;
+$$;
 
 ---- fin procedimientos para poblar las entidades--------------------------
 
+CREATE OR REPLACE FUNCTION obtener_asientos(p_id_lugar VARCHAR, p_id_evento VARCHAR)
+RETURNS TABLE (
+    total_disponible INT,
+    total_vendido INT,
+    total_reservado INT
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        CAST(COUNT(*) FILTER (WHERE o.estado = 'disponible') AS INT) AS total_disponible,
+        CAST(COUNT(*) FILTER (WHERE o.estado = 'vendido') AS INT) AS total_vendido,
+        CAST(COUNT(*) FILTER (WHERE o.estado = 'reservado') AS INT) AS total_reservado
+    FROM ocupacion_asientos o
+    JOIN asiento a ON a.id = o.id_asiento
+    JOIN evento e ON e.id = o.id_evento
+    WHERE a.id_lugar = p_id_lugar AND e.id = p_id_evento;
+END;
+$$ LANGUAGE plpgsql;
+
+select * from obtener_asientos('1', '1');
+select * from obtener_asientos('1', '2');
 
 
+---- funciones con return query-----------------------------------------------
 
