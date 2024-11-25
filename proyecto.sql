@@ -136,7 +136,7 @@ create table ticket(
 
 create table metodo_pago(
 	id varchar primary key,
-	tipo_pago check (tipo_pago in ('efectivo', 'efectivo y tarjeta de credito', 'efectivo y tarjeta de credito conciertosya', 'tarjeta de credito y tarjeta conciertosya')
+	tipo_pago varchar check (tipo_pago in ('efectivo', 'efectivo y tarjeta de credito', 'efectivo y tarjeta de credito conciertosya', 'tarjeta de credito y tarjeta conciertosya'))
 )
 
 create table factura(
@@ -447,3 +447,539 @@ select * from obtener_asientos('1', '2');
 
 ---- funciones con return query-----------------------------------------------
 
+
+
+---- CRUD ARTISTA -----
+
+CREATE OR REPLACE PROCEDURE crear_artista(
+    p_id VARCHAR,
+    p_nombre VARCHAR,
+    p_genero_musical VARCHAR
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO artista (id, nombre, genero_musical)
+    VALUES (p_id, p_nombre, p_genero_musical);
+EXCEPTION
+    WHEN unique_violation THEN
+        RAISE NOTICE 'Error: Ya existe un artista con el ID %', p_id;
+    WHEN check_violation THEN
+        RAISE NOTICE 'Error: El género musical % no es válido.', p_genero_musical;
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Error desconocido: %', SQLERRM;
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE modificar_artista(
+    p_id VARCHAR,
+    p_nombre VARCHAR,
+    p_genero_musical VARCHAR
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+    UPDATE artista
+    SET nombre = p_nombre, genero_musical = p_genero_musical
+    WHERE id = p_id;
+
+    IF NOT FOUND THEN
+        RAISE NOTICE 'No se encontró ningún artista con ID % para modificar.', p_id;
+    END IF;
+EXCEPTION
+    WHEN check_violation THEN
+        RAISE NOTICE 'Error: El género musical % no es válido.', p_genero_musical;
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Error desconocido al modificar el artista: %', SQLERRM;
+END;
+$$;
+
+
+CREATE OR REPLACE PROCEDURE eliminar_artista(
+    p_id VARCHAR
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+
+    DELETE FROM artista WHERE id = p_id;
+
+    IF NOT FOUND THEN
+        RAISE NOTICE 'No se encontró ningún artista con ID %', p_id;
+    END IF;
+EXCEPTION
+    WHEN foreign_key_violation THEN
+        RAISE NOTICE 'Error: No se puede eliminar el artista % debido a restricciones de clave foránea.', p_id;
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Error desconocido al eliminar el artista: %', SQLERRM;
+END;
+$$;
+
+-- FINAL CRUD ARTISTA
+
+-- CRUD EVENTO DETALLADO
+
+CREATE OR REPLACE PROCEDURE crear_evento_detallado(
+    p_id VARCHAR,
+    p_id_evento VARCHAR,
+    p_id_artista VARCHAR
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO evento_detallado (id, id_evento, id_artista)
+    VALUES (p_id, p_id_evento, p_id_artista);
+EXCEPTION
+    WHEN foreign_key_violation THEN
+        RAISE NOTICE 'Error: El ID de evento % o el ID de artista % no existen.', p_id_evento, p_id_artista;
+    WHEN unique_violation THEN
+        RAISE NOTICE 'Error: Ya existe un evento detallado con el ID %', p_id;
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Error desconocido: %', SQLERRM;
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE modificar_evento_detallado(
+    p_id VARCHAR,
+    p_id_evento VARCHAR,
+    p_id_artista VARCHAR
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+    UPDATE evento_detallado
+    SET id_evento = p_id_evento, id_artista = p_id_artista
+    WHERE id = p_id;
+
+    IF NOT FOUND THEN
+        RAISE NOTICE 'No se encontró ningún evento detallado con ID % para modificar.', p_id;
+    END IF;
+EXCEPTION
+    WHEN foreign_key_violation THEN
+        RAISE NOTICE 'Error: Los IDs de evento (%), artista (%), o ambos no existen.', p_id_evento, p_id_artista;
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Error desconocido al modificar evento detallado: %', SQLERRM;
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE eliminar_evento_detallado(
+    p_id VARCHAR
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+    DELETE FROM evento_detallado WHERE id = p_id;
+
+    IF NOT FOUND THEN
+        RAISE NOTICE 'No se encontró ningún evento detallado con ID % para eliminar.', p_id;
+    END IF;
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Error desconocido al eliminar evento detallado: %', SQLERRM;
+END;
+$$;
+
+-- FINAL CRUD EVENTO DETALLADO
+
+-- CRUD EVENTO 
+
+CREATE OR REPLACE PROCEDURE crear_evento(
+    p_id VARCHAR,
+    p_nombre VARCHAR,
+    p_fecha DATE,
+    p_hora TIME,
+    p_descripcion VARCHAR,
+    p_genero_musical VARCHAR,
+    p_estado VARCHAR,
+    p_cartel VARCHAR,
+    p_lugar_id VARCHAR
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO evento (id, nombre, fecha, hora, descripcion, genero_musical, estado, cartel, lugar_id)
+    VALUES (p_id, p_nombre, p_fecha, p_hora, p_descripcion, p_genero_musical, p_estado, p_cartel, p_lugar_id);
+EXCEPTION
+    WHEN unique_violation THEN
+        RAISE NOTICE 'Error: Ya existe un evento con el ID %', p_id;
+    WHEN check_violation THEN
+        RAISE NOTICE 'Error: El valor % no es válido para el campo %', p_genero_musical, 'genero_musical';
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Error desconocido al crear el evento: %', SQLERRM;
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE modificar_evento(
+    p_id VARCHAR,
+    p_nombre VARCHAR,
+    p_fecha DATE,
+    p_hora TIME,
+    p_descripcion VARCHAR,
+    p_genero_musical VARCHAR,
+    p_estado VARCHAR,
+    p_cartel VARCHAR,
+    p_lugar_id VARCHAR
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+    UPDATE evento
+    SET nombre = p_nombre, fecha = p_fecha, hora = p_hora, descripcion = p_descripcion, 
+        genero_musical = p_genero_musical, estado = p_estado, cartel = p_cartel, lugar_id = p_lugar_id
+    WHERE id = p_id;
+
+    IF NOT FOUND THEN
+        RAISE NOTICE 'No se encontró ningún evento con ID % para modificar.', p_id;
+    END IF;
+EXCEPTION
+    WHEN check_violation THEN
+        RAISE NOTICE 'Error: El valor % no es válido para el campo %', p_genero_musical, 'genero_musical';
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Error desconocido al modificar el evento: %', SQLERRM;
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE eliminar_evento(
+    p_id VARCHAR
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+    DELETE FROM evento WHERE id = p_id;
+
+    IF NOT FOUND THEN
+        RAISE NOTICE 'No se encontró ningún evento con ID % para eliminar.', p_id;
+    END IF;
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Error desconocido al eliminar el evento: %', SQLERRM;
+END;
+$$;
+
+--FINAL CRUD EVENTO
+
+
+-- CRUD LUGAR
+
+CREATE OR REPLACE PROCEDURE crear_lugar(
+    p_id VARCHAR,
+    p_nombre VARCHAR,
+    p_direccion VARCHAR,
+    p_capacidad INT,
+    p_ciudad VARCHAR,
+    p_imagen VARCHAR
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO lugar (id, nombre, direccion, capacidad, ciudad, imagen)
+    VALUES (p_id, p_nombre, p_direccion, p_capacidad, p_ciudad, p_imagen);
+EXCEPTION
+    WHEN unique_violation THEN
+        RAISE NOTICE 'Error: Ya existe un lugar con el ID %', p_id;
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Error desconocido al crear el lugar: %', SQLERRM;
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE modificar_lugar(
+    p_id VARCHAR,
+    p_nombre VARCHAR,
+    p_direccion VARCHAR,
+    p_capacidad INT,
+    p_ciudad VARCHAR,
+    p_imagen VARCHAR
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+    UPDATE lugar
+    SET nombre = p_nombre, direccion = p_direccion, capacidad = p_capacidad, ciudad = p_ciudad, imagen = p_imagen
+    WHERE id = p_id;
+
+    IF NOT FOUND THEN
+        RAISE NOTICE 'No se encontró ningún lugar con ID % para modificar.', p_id;
+    END IF;
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Error desconocido al modificar el lugar: %', SQLERRM;
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE eliminar_lugar(
+    p_id VARCHAR
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+    DELETE FROM lugar WHERE id = p_id;
+
+    IF NOT FOUND THEN
+        RAISE NOTICE 'No se encontró ningún lugar con ID % para eliminar.', p_id;
+    END IF;
+EXCEPTION
+    WHEN foreign_key_violation THEN
+        RAISE NOTICE 'Error: No se puede eliminar el lugar % debido a restricciones de clave foránea.', p_id;
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Error desconocido al eliminar el lugar: %', SQLERRM;
+END;
+$$;
+
+--FINAL CRUD LUGAR
+
+-- CRUD ASIENTOS
+
+CREATE OR REPLACE PROCEDURE crear_asiento(
+    p_id VARCHAR,
+    p_codigo VARCHAR,
+    p_fila VARCHAR,
+    p_columna VARCHAR,
+    p_precio NUMERIC,
+    p_descuento NUMERIC,
+    p_tipo VARCHAR,
+    p_estado VARCHAR,
+    p_id_lugar VARCHAR
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO asiento (id, codigo, fila, columna, precio, descuento, tipo, estado, id_lugar)
+    VALUES (p_id, p_codigo, p_fila, p_columna, p_precio, p_descuento, p_tipo, p_estado, p_id_lugar);
+EXCEPTION
+    WHEN unique_violation THEN
+        RAISE NOTICE 'Error: Ya existe un asiento con el ID %', p_id;
+    WHEN foreign_key_violation THEN
+        RAISE NOTICE 'Error: El ID de lugar % no existe.', p_id_lugar;
+    WHEN check_violation THEN
+        RAISE NOTICE 'Error: El tipo % o el estado % no son válidos.', p_tipo, p_estado;
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Error desconocido: %', SQLERRM;
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE modificar_asiento(
+    p_id VARCHAR,
+    p_codigo VARCHAR,
+    p_fila VARCHAR,
+    p_columna VARCHAR,
+    p_precio NUMERIC,
+    p_descuento NUMERIC,
+    p_tipo VARCHAR,
+    p_estado VARCHAR,
+    p_id_lugar VARCHAR
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+    UPDATE asiento
+    SET codigo = p_codigo,
+        fila = p_fila,
+        columna = p_columna,
+        precio = p_precio,
+        descuento = p_descuento,
+        tipo = p_tipo,
+        estado = p_estado,
+        id_lugar = p_id_lugar
+    WHERE id = p_id;
+
+    IF NOT FOUND THEN
+        RAISE NOTICE 'No se encontró ningún asiento con ID % para modificar.', p_id;
+    END IF;
+EXCEPTION
+    WHEN foreign_key_violation THEN
+        RAISE NOTICE 'Error: El ID de lugar % no existe.', p_id_lugar;
+    WHEN check_violation THEN
+        RAISE NOTICE 'Error: El tipo % o el estado % no son válidos.', p_tipo, p_estado;
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Error desconocido al modificar el asiento: %', SQLERRM;
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE eliminar_asiento(
+    p_id VARCHAR
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+    DELETE FROM asiento WHERE id = p_id;
+
+    IF NOT FOUND THEN
+        RAISE NOTICE 'No se encontró ningún asiento con ID %', p_id;
+    END IF;
+EXCEPTION
+    WHEN foreign_key_violation THEN
+        RAISE NOTICE 'No se puede eliminar el asiento % debido a restricciones de clave foránea.', p_id;
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Error desconocido al eliminar el asiento: %', SQLERRM;
+END;
+$$;
+
+
+-- CRUD Clientes
+
+CREATE OR REPLACE PROCEDURE crear_cliente(
+    p_id VARCHAR,
+    p_nombre VARCHAR,
+    p_email VARCHAR,
+    p_telefono VARCHAR,
+    p_direccion VARCHAR
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO cliente (id, nombre, email, telefono, direccion)
+    VALUES (p_id, p_nombre, p_email, p_telefono, p_direccion);
+EXCEPTION
+    WHEN unique_violation THEN
+        RAISE NOTICE 'Error: Ya existe un cliente con el ID %', p_id;
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Error desconocido: %', SQLERRM;
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE leer_cliente(
+    p_id VARCHAR
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+    -- Consulta del cliente por su ID
+    RAISE NOTICE 'Cliente: %', (SELECT row_to_json(cliente) FROM cliente WHERE id = p_id);
+    -- O si prefieres devolverlo en un conjunto de resultados, puedes usar SELECT
+    -- SELECT * FROM cliente WHERE id = p_id;
+EXCEPTION
+    WHEN no_data_found THEN
+        RAISE NOTICE 'No se encontró un cliente con el ID %', p_id;
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Error al consultar el cliente: %', SQLERRM;
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE eliminar_cliente(
+    p_id VARCHAR
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+    DELETE FROM cliente WHERE id = p_id;
+
+    IF NOT FOUND THEN
+        RAISE NOTICE 'No se encontró ningún cliente con ID %', p_id;
+    END IF;
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Error desconocido al eliminar el cliente: %', SQLERRM;
+END;
+$$;
+
+--- TRIGGERS 
+
+
+-- Evento detallado
+----- ESTA FUNCION ES EL TRIGGER QUE SE EJECUTA CUANDO SE ELIMINA UN ARTISTA
+
+CREATE OR REPLACE FUNCTION eliminar_eventos_detallados()
+RETURNS TRIGGER AS $$
+DECLARE
+    eventos_count INTEGER; -- Variable para contar los eventos asociados
+BEGIN
+    -- Contar los eventos detallados asociados al artista
+    SELECT COUNT(*) INTO eventos_count 
+    FROM evento_detallado 
+    WHERE id_artista = OLD.id;
+
+    -- Verificar si existen eventos asociados
+    IF eventos_count = 0 THEN
+        RAISE NOTICE 'No se eliminaron eventos detallados porque no hay eventos asociados al artista ID %.', OLD.id;
+    ELSE
+        BEGIN
+            DELETE FROM evento_detallado WHERE id_artista = OLD.id;
+            RAISE NOTICE 'Se eliminaron % eventos detallados asociados al artista ID %.', eventos_count, OLD.id;
+        EXCEPTION
+            WHEN foreign_key_violation THEN
+                RAISE NOTICE 'No se pudo eliminar eventos detallados por una violación de clave foránea para el artista ID %.', OLD.id;
+            WHEN OTHERS THEN
+                RAISE NOTICE 'Error desconocido al eliminar eventos detallados para el artista ID %: %', OLD.id, SQLERRM;
+        END;
+    END IF;
+
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_eliminar_eventos_detallados
+BEFORE DELETE ON artista
+FOR EACH ROW
+EXECUTE FUNCTION eliminar_eventos_detallados();
+
+
+--- Trigger evento: cuando se elimina un evento se elimina tambien los eventos detallados asociados a ese evento
+
+CREATE OR REPLACE FUNCTION eliminar_eventos_detallados()
+RETURNS TRIGGER AS $$
+DECLARE
+    eventos_count INTEGER; -- Variable para contar los eventos detallados
+BEGIN
+    -- Contar los eventos detallados asociados al evento
+    SELECT COUNT(*) INTO eventos_count 
+    FROM evento_detallado 
+    WHERE id_evento = OLD.id;
+
+    -- Verificar si existen eventos asociados
+    IF eventos_count = 0 THEN
+        RAISE NOTICE 'No se eliminaron eventos detallados porque no hay eventos asociados al evento ID %.', OLD.id;
+    ELSE
+        BEGIN
+            DELETE FROM evento_detallado WHERE id_evento = OLD.id;
+            RAISE NOTICE 'Se eliminaron % eventos detallados asociados al evento ID %.', eventos_count, OLD.id;
+        EXCEPTION
+            WHEN foreign_key_violation THEN
+                RAISE NOTICE 'No se pudo eliminar eventos detallados por una violación de clave foránea para el evento ID %.', OLD.id;
+            WHEN OTHERS THEN
+                RAISE NOTICE 'Error desconocido al eliminar eventos detallados para el evento ID %: %', OLD.id, SQLERRM;
+        END;
+    END IF;
+
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_eliminar_eventos_detallados
+BEFORE DELETE ON evento
+FOR EACH ROW
+EXECUTE FUNCTION eliminar_eventos_detallados();
+
+-- Trigger evento: FUNCION PARA ELIMINAR EVENTOS AL ELIMINAR LUGAR
+
+CREATE OR REPLACE FUNCTION eliminar_eventos_por_lugar()
+RETURNS TRIGGER AS $$
+DECLARE
+    eventos_count INTEGER; 
+BEGIN
+    SELECT COUNT(*) INTO eventos_count 
+    FROM evento 
+    WHERE lugar_id = OLD.id;
+
+    IF eventos_count = 0 THEN
+        RAISE NOTICE 'No se eliminaron eventos porque no hay eventos asociados al lugar ID %.', OLD.id;
+    ELSE
+        BEGIN
+            DELETE FROM evento WHERE lugar_id = OLD.id;
+            RAISE NOTICE 'Se eliminaron % eventos asociados al lugar ID %.', eventos_count, OLD.id;
+        EXCEPTION
+            WHEN foreign_key_violation THEN
+                RAISE NOTICE 'No se pudo eliminar eventos debido a una violación de clave foránea para el lugar ID %.', OLD.id;
+            WHEN OTHERS THEN
+                RAISE NOTICE 'Error desconocido al eliminar eventos para el lugar ID %: %', OLD.id, SQLERRM;
+        END;
+    END IF;
+
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+-- TRIGGER PARA EJECUTAR LA FUNCION ANTERIOR AL ELIMINAR UN LUGAR
+CREATE TRIGGER trigger_eliminar_eventos_por_lugar
+BEFORE DELETE ON lugar
+FOR EACH ROW
+EXECUTE FUNCTION eliminar_eventos_por_lugar();
+
+-- Trigger ocupacion_asiento: cuando se elimina un evento tambien se elimina la ocupacion de asiento
+
+CREATE OR REPLACE FUNCTION eliminar_ocupacion_asientos()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Eliminar las ocupaciones de asiento asociadas al evento que se elimina
+    DELETE FROM ocupacion_asientos
+    WHERE id_evento = OLD.id;
+
+    RETURN OLD;  
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_eliminar_ocupacion_asientos
+BEFORE DELETE ON evento
+FOR EACH ROW
+EXECUTE FUNCTION eliminar_ocupacion_asientos();
