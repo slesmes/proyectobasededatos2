@@ -34,6 +34,13 @@ create sequence codigo_inventario
 	start with 1
 	increment by 1;
 
+create sequence id_factura
+	start with 1
+	increment by 1;
+
+create sequence id_ticket
+	start with 1
+	increment by 1;
 
 
 --------------------fin secuencias---------------------------
@@ -141,13 +148,7 @@ create table metodo_pago(
 
 create table factura(
 	id varchar primary key,
-	fecha_emision date,
-	total numeric,
-	id_metodo_pago varchar,
-	id_cliente varchar,
-	detalle xml,
-	foreign key (id_cliente) references cliente(id),
-	foreign key (id_metodo_pago) references metodo_pago(id)
+	detalle xml
 )
 
 CREATE TABLE ocupacion_asientos (
@@ -444,10 +445,280 @@ $$ LANGUAGE plpgsql;
 select * from obtener_asientos('1', '1');
 select * from obtener_asientos('1', '2');
 
+CREATE OR REPLACE FUNCTION obtener_precio_asiento(asiento_id VARCHAR)
+RETURNS TABLE (
+    precio_base NUMERIC,
+    descuento_aplicado NUMERIC,
+    precio_final NUMERIC
+) 
+LANGUAGE plpgsql AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        precio AS precio_base, 
+        (precio * descuento) AS descuento_aplicado, 
+        (precio - (precio * descuento)) AS precio_final
+    FROM asiento
+    WHERE id = asiento_id;
+END $$;
+
+select * from obtener_precio_asiento('1')
+
 
 ---- funciones con return query-----------------------------------------------
+CREATE TRIGGER crear_factura_trigger
+AFTER INSERT ON ticket
+FOR EACH ROW
+EXECUTE FUNCTION crear_factura();
+
+CREATE TRIGGER trigger_eliminar_eventos_detallados_a
+BEFORE DELETE ON artista
+FOR EACH ROW
+EXECUTE FUNCTION eliminar_eventos_detallados_a();
+
+CREATE TRIGGER trigger_eliminar_eventos_detallados_e
+BEFORE DELETE ON evento
+FOR EACH ROW
+EXECUTE FUNCTION eliminar_eventos_detallados_e();
+
+CREATE TRIGGER trigger_eliminar_eventos_por_lugar
+BEFORE DELETE ON lugar
+FOR EACH ROW
+EXECUTE FUNCTION eliminar_eventos_por_lugar();
+
+CREATE TRIGGER trigger_eliminar_ocupacion_asientos
+BEFORE DELETE ON evento
+FOR EACH ROW
+EXECUTE FUNCTION eliminar_ocupacion_asientos();
 
 
+CREATE OR REPLACE FUNCTION crear_factura()
+RETURNS TRIGGER
+LANGUAGE plpgsql AS $$
+DECLARE
+    nombre_cliente TEXT;
+BEGIN
+
+    SELECT nombre INTO nombre_cliente
+    FROM cliente
+    WHERE id = NEW.id_cliente;
+
+
+    INSERT INTO factura (id, detalle)
+    VALUES (
+        nextval('id_factura'), 
+        XMLPARSE(
+            DOCUMENT '<detalle>' ||
+                '<cliente>' || nombre_cliente || '</cliente>' ||
+                '<fecha_emision>' || CURRENT_DATE || '</fecha_emision>' ||
+                '<total>0</total>' ||
+                '<metodo_pago>efectivo</metodo_pago>' ||
+            '</detalle>'
+        )
+    );
+
+    RETURN NEW;
+END $$;
+
+CREATE OR REPLACE FUNCTION eliminar_eventos_detallados_a()
+RETURNS TRIGGER AS $$
+DECLARE
+    eventos_count INTEGER; 
+BEGIN
+    SELECT COUNT(*) INTO eventos_count 
+    FROM evento_detallado
+    WHERE id_artista = OLD.id;
+
+    IF eventos_count = 0 THEN
+        RAISE NOTICE 'No se eliminaron eventos detallados porque no hay eventos asociados al artista ID %.', OLD.id;
+    ELSE
+        BEGIN
+            DELETE FROM evento_detallado WHERE id_artista = OLD.id;
+            RAISE NOTICE 'Se eliminaron % eventos detallados asociados al artista ID %.', eventos_count, OLD.id;
+        EXCEPTION
+            WHEN foreign_key_violation THEN
+                RAISE NOTICE 'No se pudo eliminar eventos detallados por una violación de clave foránea para el artista ID %.', OLD.id;
+            WHEN OTHERS THEN
+                RAISE NOTICE 'Error desconocido al eliminar eventos detallados para el artista ID %: %', OLD.id, SQLERRM;
+        END;
+    END IF;
+
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION eliminar_eventos_detallados_e()
+RETURNS TRIGGER AS $$
+DECLARE
+    eventos_count INTEGER; 
+BEGIN
+    
+    SELECT COUNT(*) INTO eventos_count 
+    FROM evento_detallado 
+    WHERE id_evento = OLD.id;
+
+    IF eventos_count = 0 THEN
+        RAISE NOTICE 'No se eliminaron eventos detallados porque no hay eventos asociados al evento ID %.', OLD.id;
+    ELSE
+        BEGIN
+            DELETE FROM evento_detallado WHERE id_evento = OLD.id;
+            RAISE NOTICE 'Se eliminaron % eventos detallados asociados al evento ID %.', eventos_count, OLD.id;
+        EXCEPTION
+            WHEN foreign_key_violation THEN
+                RAISE NOTICE 'No se pudo eliminar eventos detallados por una violación de clave foránea para el evento ID %.', OLD.id;
+            WHEN OTHERS THEN
+                RAISE NOTICE 'Error desconocido al eliminar eventos detallados para el evento ID %: %', OLD.id, SQLERRM;
+        END;
+    END IF;
+
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION eliminar_eventos_por_lugar()
+RETURNS TRIGGER AS $$
+DECLARE
+    eventos_count INTEGER; 
+BEGIN
+    SELECT COUNT(*) INTO eventos_count 
+    FROM evento 
+    WHERE lugar_id = OLD.id;
+
+    IF eventos_count = 0 THEN
+        RAISE NOTICE 'No se eliminaron eventos porque no hay eventos asociados al lugar ID %.', OLD.id;
+    ELSE
+        BEGIN
+            DELETE FROM evento WHERE lugar_id = OLD.id;
+            RAISE NOTICE 'Se eliminaron % eventos asociados al lugar ID %.', eventos_count, OLD.id;
+        EXCEPTION
+            WHEN foreign_key_violation THEN
+                RAISE NOTICE 'No se pudo eliminar eventos debido a una violación de clave foránea para el lugar ID %.', OLD.id;
+            WHEN OTHERS THEN
+                RAISE NOTICE 'Error desconocido al eliminar eventos para el lugar ID %: %', OLD.id, SQLERRM;
+        END;
+    END IF;
+
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION eliminar_ocupacion_asientos()
+RETURNS TRIGGER AS $$
+BEGIN
+    DELETE FROM ocupacion_asientos
+    WHERE id_evento = OLD.id;
+
+    RETURN OLD;  
+END;
+$$ LANGUAGE plpgsql;
+
+------------triggers------------------------------------------------------------
+
+CREATE OR REPLACE PROCEDURE crear_ticket(
+    p_id_cliente VARCHAR,
+    p_id_asiento VARCHAR,
+    p_id_evento VARCHAR,
+    p_metodo_pago VARCHAR
+)
+LANGUAGE plpgsql AS $$
+DECLARE
+    precio_base_v NUMERIC;
+    descuento_aplicado_v NUMERIC;
+    precio_final_v NUMERIC;
+    estado_asiento VARCHAR;
+    factura_id VARCHAR;
+BEGIN
+    SELECT estado INTO estado_asiento
+    FROM asiento
+    WHERE id = p_id_asiento;
+
+    IF estado_asiento = 'vendido' OR estado_asiento = 'reservado' THEN
+        RAISE EXCEPTION 'El asiento con ID % no está disponible (estado: %)', p_id_asiento, estado_asiento;
+    END IF;
+
+    SELECT precio_base, descuento_aplicado, precio_final
+    INTO precio_base_v, descuento_aplicado_v, precio_final_v
+    FROM obtener_precio_asiento(p_id_asiento);
+
+    INSERT INTO ticket (id, fecha_compra, descuento, precio, precio_descuento, id_asiento, id_cliente, id_evento)
+    VALUES (
+        nextval('id_ticket'),
+        CURRENT_DATE,
+        descuento_aplicado_v,
+        precio_base_v,
+        precio_final_v,
+        p_id_asiento,
+        p_id_cliente,
+        p_id_evento
+    );
+
+
+    UPDATE asiento
+    SET estado = 'vendido'
+    WHERE id = p_id_asiento;
+
+	 CALL actualizar_metodo_pago_factura(p_id_cliente, CURRENT_DATE, p_metodo_pago);
+
+END $$;
+
+CALL crear_ticket('1', '1', '1', '30');
+
+-------------------funciones del ticket----------------------
+
+CREATE OR REPLACE PROCEDURE actualizar_metodo_pago_factura(
+    p_id_cliente VARCHAR,
+    p_fecha DATE,
+    p_metodo_pago VARCHAR
+)
+LANGUAGE plpgsql AS $$
+DECLARE
+    factura_id VARCHAR;
+	v_metodo_pago varchar;
+BEGIN
+
+    SELECT id INTO factura_id
+    FROM factura
+    WHERE detalle::text LIKE '%' || p_id_cliente || '%'
+      AND detalle::text LIKE '%' || p_fecha || '%'
+    ORDER BY id DESC
+    LIMIT 1;
+
+    IF factura_id IS NOT NULL THEN
+		select * into v_metodo_pago from obtener_tipo_pago(p_metodo_pago);
+        UPDATE factura
+        SET detalle = XMLPARSE(
+            DOCUMENT REPLACE(
+                detalle::text,
+                '<metodo_pago>efectivo</metodo_pago>',
+                '<metodo_pago>' || v_metodo_pago || '</metodo_pago>'
+            )
+        )
+        WHERE id = factura_id;
+    ELSE
+        RAISE NOTICE 'No se encontró una factura para el cliente % en la fecha %', p_id_cliente, p_fecha;
+    END IF;
+END $$;
+
+---------------------funciones de la factura------------------------------------------------
+
+CREATE OR REPLACE FUNCTION obtener_tipo_pago(p_id_metodo_pago VARCHAR)
+RETURNS VARCHAR
+LANGUAGE plpgsql AS $$
+DECLARE
+    tipo_pago_v VARCHAR;
+BEGIN
+    SELECT tipo_pago INTO tipo_pago_v
+    FROM metodo_pago
+    WHERE id = p_id_metodo_pago;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'El ID del método de pago % no es válido. Debe ser uno de los valores existentes (1, 2, 3, 4)', p_id_metodo_pago;
+    END IF;
+
+    RETURN tipo_pago_v;
+END $$;
+
+---------------funciones del metodo de pago--------------------------------------
 
 ---- CRUD ARTISTA -----
 
@@ -713,9 +984,7 @@ EXCEPTION
 END;
 $$;
 
---FINAL CRUD LUGAR
-
--- CRUD ASIENTOS
+--FINAL CRUD LUGAR------------------------------
 
 CREATE OR REPLACE PROCEDURE crear_asiento(
     p_id VARCHAR,
@@ -800,7 +1069,7 @@ END;
 $$;
 
 
--- CRUD Clientes
+-- Final CRUD ASIENTOS---------------------------
 
 CREATE OR REPLACE PROCEDURE crear_cliente(
     p_id VARCHAR,
@@ -854,132 +1123,7 @@ EXCEPTION
 END;
 $$;
 
---- TRIGGERS 
+-- CRUD CLIENTES------------------------------------
 
 
--- Evento detallado
------ ESTA FUNCION ES EL TRIGGER QUE SE EJECUTA CUANDO SE ELIMINA UN ARTISTA
 
-CREATE OR REPLACE FUNCTION eliminar_eventos_detallados()
-RETURNS TRIGGER AS $$
-DECLARE
-    eventos_count INTEGER; -- Variable para contar los eventos asociados
-BEGIN
-    -- Contar los eventos detallados asociados al artista
-    SELECT COUNT(*) INTO eventos_count 
-    FROM evento_detallado 
-    WHERE id_artista = OLD.id;
-
-    -- Verificar si existen eventos asociados
-    IF eventos_count = 0 THEN
-        RAISE NOTICE 'No se eliminaron eventos detallados porque no hay eventos asociados al artista ID %.', OLD.id;
-    ELSE
-        BEGIN
-            DELETE FROM evento_detallado WHERE id_artista = OLD.id;
-            RAISE NOTICE 'Se eliminaron % eventos detallados asociados al artista ID %.', eventos_count, OLD.id;
-        EXCEPTION
-            WHEN foreign_key_violation THEN
-                RAISE NOTICE 'No se pudo eliminar eventos detallados por una violación de clave foránea para el artista ID %.', OLD.id;
-            WHEN OTHERS THEN
-                RAISE NOTICE 'Error desconocido al eliminar eventos detallados para el artista ID %: %', OLD.id, SQLERRM;
-        END;
-    END IF;
-
-    RETURN OLD;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trigger_eliminar_eventos_detallados
-BEFORE DELETE ON artista
-FOR EACH ROW
-EXECUTE FUNCTION eliminar_eventos_detallados();
-
-
---- Trigger evento: cuando se elimina un evento se elimina tambien los eventos detallados asociados a ese evento
-
-CREATE OR REPLACE FUNCTION eliminar_eventos_detallados()
-RETURNS TRIGGER AS $$
-DECLARE
-    eventos_count INTEGER; -- Variable para contar los eventos detallados
-BEGIN
-    -- Contar los eventos detallados asociados al evento
-    SELECT COUNT(*) INTO eventos_count 
-    FROM evento_detallado 
-    WHERE id_evento = OLD.id;
-
-    -- Verificar si existen eventos asociados
-    IF eventos_count = 0 THEN
-        RAISE NOTICE 'No se eliminaron eventos detallados porque no hay eventos asociados al evento ID %.', OLD.id;
-    ELSE
-        BEGIN
-            DELETE FROM evento_detallado WHERE id_evento = OLD.id;
-            RAISE NOTICE 'Se eliminaron % eventos detallados asociados al evento ID %.', eventos_count, OLD.id;
-        EXCEPTION
-            WHEN foreign_key_violation THEN
-                RAISE NOTICE 'No se pudo eliminar eventos detallados por una violación de clave foránea para el evento ID %.', OLD.id;
-            WHEN OTHERS THEN
-                RAISE NOTICE 'Error desconocido al eliminar eventos detallados para el evento ID %: %', OLD.id, SQLERRM;
-        END;
-    END IF;
-
-    RETURN OLD;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trigger_eliminar_eventos_detallados
-BEFORE DELETE ON evento
-FOR EACH ROW
-EXECUTE FUNCTION eliminar_eventos_detallados();
-
--- Trigger evento: FUNCION PARA ELIMINAR EVENTOS AL ELIMINAR LUGAR
-
-CREATE OR REPLACE FUNCTION eliminar_eventos_por_lugar()
-RETURNS TRIGGER AS $$
-DECLARE
-    eventos_count INTEGER; 
-BEGIN
-    SELECT COUNT(*) INTO eventos_count 
-    FROM evento 
-    WHERE lugar_id = OLD.id;
-
-    IF eventos_count = 0 THEN
-        RAISE NOTICE 'No se eliminaron eventos porque no hay eventos asociados al lugar ID %.', OLD.id;
-    ELSE
-        BEGIN
-            DELETE FROM evento WHERE lugar_id = OLD.id;
-            RAISE NOTICE 'Se eliminaron % eventos asociados al lugar ID %.', eventos_count, OLD.id;
-        EXCEPTION
-            WHEN foreign_key_violation THEN
-                RAISE NOTICE 'No se pudo eliminar eventos debido a una violación de clave foránea para el lugar ID %.', OLD.id;
-            WHEN OTHERS THEN
-                RAISE NOTICE 'Error desconocido al eliminar eventos para el lugar ID %: %', OLD.id, SQLERRM;
-        END;
-    END IF;
-
-    RETURN OLD;
-END;
-$$ LANGUAGE plpgsql;
-
--- TRIGGER PARA EJECUTAR LA FUNCION ANTERIOR AL ELIMINAR UN LUGAR
-CREATE TRIGGER trigger_eliminar_eventos_por_lugar
-BEFORE DELETE ON lugar
-FOR EACH ROW
-EXECUTE FUNCTION eliminar_eventos_por_lugar();
-
--- Trigger ocupacion_asiento: cuando se elimina un evento tambien se elimina la ocupacion de asiento
-
-CREATE OR REPLACE FUNCTION eliminar_ocupacion_asientos()
-RETURNS TRIGGER AS $$
-BEGIN
-    -- Eliminar las ocupaciones de asiento asociadas al evento que se elimina
-    DELETE FROM ocupacion_asientos
-    WHERE id_evento = OLD.id;
-
-    RETURN OLD;  
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trigger_eliminar_ocupacion_asientos
-BEFORE DELETE ON evento
-FOR EACH ROW
-EXECUTE FUNCTION eliminar_ocupacion_asientos();
