@@ -112,7 +112,7 @@ create table asiento(
 	id_lugar varchar,
 	
 	foreign key (id_lugar) references lugar(id)
-)
+);
 
 create table inventario(
 	id varchar primary key,
@@ -124,7 +124,7 @@ create table inventario(
 	
 	foreign key(id_lugar) references lugar(id),
 	foreign key(id_evento) references evento(id)
-)
+);
 
 create table ticket(
 	id varchar primary key,
@@ -149,7 +149,7 @@ create table metodo_pago(
 create table factura(
 	id varchar primary key,
 	detalle xml
-)
+);
 
 CREATE TABLE ocupacion_asientos (
     id_asiento VARCHAR,
@@ -350,7 +350,9 @@ BEGIN
                 ELSE
                     tipo_asiento := 'general'; -- El resto son "general"
                 END IF;
-
+				
+				estado_seleccionado := estado_asiento[TRUNC(RANDOM() * 3 + 1)::INT];
+				
                 INSERT INTO asiento (id, codigo, fila, columna, precio, descuento, tipo, estado, id_lugar)
                 VALUES (
                     nextval('id_asiento'), 
@@ -368,12 +370,11 @@ BEGIN
                         ELSE 0
                      END), -- Descuento según tipo
                     tipo_asiento, 
-                    estado_asiento[TRUNC(RANDOM() * 3 + 1)::INT], 
+                    estado_seleccionado,
                     id_lugar_v
                 );
 
-                -- Seleccionar el estado del asiento aleatoriamente
-                estado_seleccionado := estado_asiento[TRUNC(RANDOM() * 3 + 1)::INT];
+                
 
                 INSERT INTO ocupacion_asientos (id_asiento, id_evento, estado)
                 VALUES (
@@ -395,6 +396,9 @@ END $$;
 
 
 call insertar_asientos();
+select * from asiento;
+select count(*) from ocupacion_asientos where id_evento = '3' and estado = 'disponible';
+select * from inventario;
 
 CREATE OR REPLACE PROCEDURE insertar_inventario()
 LANGUAGE plpgsql AS $$
@@ -421,6 +425,7 @@ BEGIN
 END;
 $$;
 
+call insertar_inventario ();
 ---- fin procedimientos para poblar las entidades--------------------------
 
 CREATE OR REPLACE FUNCTION obtener_asientos(p_id_lugar VARCHAR, p_id_evento VARCHAR)
@@ -490,6 +495,11 @@ CREATE TRIGGER trigger_eliminar_ocupacion_asientos
 BEFORE DELETE ON evento
 FOR EACH ROW
 EXECUTE FUNCTION eliminar_ocupacion_asientos();
+
+CREATE TRIGGER actualizar_inventario_trigger
+AFTER INSERT ON ticket
+FOR EACH ROW
+EXECUTE FUNCTION actualizar_inventario();
 
 
 CREATE OR REPLACE FUNCTION crear_factura()
@@ -612,6 +622,26 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+
+CREATE OR REPLACE FUNCTION actualizar_inventario()
+RETURNS TRIGGER
+LANGUAGE plpgsql AS $$
+BEGIN
+    -- Actualizar el inventario según el evento asociado al ticket
+    UPDATE inventario
+    SET 
+        cantidad_disponible = cantidad_disponible - 1,
+        cantidad_vendidos = cantidad_vendidos + 1
+    WHERE id_evento = NEW.id_evento;
+
+    -- Verificar si el inventario fue actualizado
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'No se encontró un registro de inventario para el evento con ID %', NEW.id_evento;
+    END IF;
+
+    RETURN NEW;
+END $$;
+
 ------------triggers------------------------------------------------------------
 
 CREATE OR REPLACE PROCEDURE crear_ticket(
@@ -653,15 +683,22 @@ BEGIN
     );
 
 
-    UPDATE asiento
-    SET estado = 'vendido'
-    WHERE id = p_id_asiento;
+    UPDATE asiento SET estado = 'vendido' WHERE id = p_id_asiento;
 
-	 CALL actualizar_metodo_pago_factura(p_id_cliente, CURRENT_DATE, p_metodo_pago);
+	update ocupacion_asientos set estado = 'vendido' where id_asiento = p_id_asiento;
+
+	CALL actualizar_metodo_pago_factura(p_id_cliente, CURRENT_DATE, p_metodo_pago);
 
 END $$;
 
 CALL crear_ticket('1', '1', '1', '30');
+
+update asiento set estado = 'disponible' where id = '1';
+select * from asiento where id = '1';
+select * from ticket;
+delete from ticket where id = '1'; 
+select * from inventario i where id = '1';
+select * from factura;
 
 -------------------funciones del ticket----------------------
 
@@ -1125,7 +1162,7 @@ $$;
 
 -- CRUD CLIENTES------------------------------------
 
--- Trigger evento: FUNCION PARA ACTUALIZAR ESTADO DE EVENTOS AL ELIMINAR LUGAR
+
 
 CREATE OR REPLACE FUNCTION cancelar_eventos_por_lugar()
 RETURNS TRIGGER AS $$
