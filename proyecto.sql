@@ -1125,5 +1125,61 @@ $$;
 
 -- CRUD CLIENTES------------------------------------
 
+-- Trigger evento: FUNCION PARA ACTUALIZAR ESTADO DE EVENTOS AL ELIMINAR LUGAR
+
+CREATE OR REPLACE FUNCTION cancelar_eventos_por_lugar()
+RETURNS TRIGGER AS $$
+DECLARE
+    eventos_count INTEGER;
+BEGIN
+    -- Contar los eventos asociados al lugar
+    SELECT COUNT(*) INTO eventos_count 
+    FROM evento 
+    WHERE lugar_id = OLD.id;
+
+    IF eventos_count = 0 THEN
+        RAISE NOTICE 'No se modificaron eventos porque no hay eventos asociados al lugar ID %.', OLD.id;
+    ELSE
+        BEGIN
+            -- Actualizar el estado a "cancelado" y establecer lugar_id a NULL
+            UPDATE evento 
+            SET estado = 'cancelado', lugar_id = NULL
+            WHERE lugar_id = OLD.id;
+
+            RAISE NOTICE 'Se actualizaron % eventos asociados al lugar ID %.', eventos_count, OLD.id;
+        EXCEPTION
+            WHEN foreign_key_violation THEN
+                RAISE NOTICE 'No se pudo actualizar eventos debido a una violación de clave foránea para el lugar ID %.', OLD.id;
+            WHEN OTHERS THEN
+                RAISE NOTICE 'Error desconocido al actualizar eventos para el lugar ID %: %', OLD.id, SQLERRM;
+        END;
+    END IF;
+
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
 
 
+-- TRIGGER PARA EJECUTAR LA FUNCION ANTERIOR AL ELIMINAR UN LUGAR
+CREATE TRIGGER trigger_cancelar_eventos_por_lugar
+BEFORE DELETE ON lugar
+FOR EACH ROW
+EXECUTE FUNCTION cancelar_eventos_por_lugar();
+
+-- Trigger ocupacion_asiento: cuando se elimina un evento tambien se elimina la ocupacion de asiento
+
+CREATE OR REPLACE FUNCTION eliminar_ocupacion_asientos()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Eliminar las ocupaciones de asiento asociadas al evento que se elimina
+    DELETE FROM ocupacion_asientos
+    WHERE id_evento = OLD.id;
+
+    RETURN OLD;  
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_eliminar_ocupacion_asientos
+BEFORE DELETE ON evento
+FOR EACH ROW
+EXECUTE FUNCTION eliminar_ocupacion_asientos();
