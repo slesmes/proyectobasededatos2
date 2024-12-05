@@ -49,7 +49,7 @@ create table artista(
 	id varchar primary key,
 	nombre varchar,
 	genero_musical varchar check(genero_musical in ('salsa','rock','pop','reguetton'))	
-)
+);
 
 create table redsocial(
 	id varchar primary key,
@@ -58,7 +58,7 @@ create table redsocial(
 	artista_id varchar,
 	
 	foreign key (artista_id) references artista(id)
-)
+);
 
 create table lugar(
 	id varchar primary key,
@@ -67,7 +67,7 @@ create table lugar(
 	capacidad int,
 	ciudad varchar,
 	imagen varchar
-)
+);
 
 create table evento(
 	id varchar primary key,
@@ -81,7 +81,7 @@ create table evento(
 	lugar_id varchar,
 	
 	foreign key (lugar_id) references lugar(id)
-)
+);
 
 create table evento_detallado(
 	id varchar primary key,
@@ -90,7 +90,7 @@ create table evento_detallado(
 	
 	foreign key (id_evento) references evento(id),
 	foreign key (id_artista) references artista(id)
-)
+);
 
 create table cliente(
 	id varchar primary key,
@@ -98,7 +98,7 @@ create table cliente(
 	email varchar,
 	telefono varchar,
 	direccion varchar
-)
+);
 
 create table asiento(
 	id varchar primary key,
@@ -139,12 +139,12 @@ create table ticket(
 	foreign key(id_asiento) references asiento(id),
 	foreign key(id_cliente) references cliente(id),
 	foreign key(id_evento) references evento(id)
-)
+);
 
 create table metodo_pago(
 	id varchar primary key,
 	tipo_pago varchar check (tipo_pago in ('efectivo', 'efectivo y tarjeta de credito', 'efectivo y tarjeta de credito conciertosya', 'tarjeta de credito y tarjeta conciertosya'))
-)
+);
 
 create table factura(
 	id varchar primary key,
@@ -426,6 +426,7 @@ END;
 $$;
 
 call insertar_inventario ();
+select * from inventario;
 ---- fin procedimientos para poblar las entidades--------------------------
 
 CREATE OR REPLACE FUNCTION obtener_asientos(p_id_lugar VARCHAR, p_id_evento VARCHAR)
@@ -500,6 +501,11 @@ CREATE TRIGGER actualizar_inventario_trigger
 AFTER INSERT ON ticket
 FOR EACH ROW
 EXECUTE FUNCTION actualizar_inventario();
+
+CREATE TRIGGER trigger_cancelar_eventos_por_lugar
+BEFORE DELETE ON lugar
+FOR EACH ROW
+EXECUTE FUNCTION cancelar_eventos_por_lugar();
 
 
 CREATE OR REPLACE FUNCTION crear_factura()
@@ -641,6 +647,38 @@ BEGIN
 
     RETURN NEW;
 END $$;
+
+CREATE OR REPLACE FUNCTION cancelar_eventos_por_lugar()
+RETURNS TRIGGER AS $$
+DECLARE
+    eventos_count INTEGER;
+BEGIN
+    -- Contar los eventos asociados al lugar
+    SELECT COUNT(*) INTO eventos_count 
+    FROM evento 
+    WHERE lugar_id = OLD.id;
+
+    IF eventos_count = 0 THEN
+        RAISE NOTICE 'No se modificaron eventos porque no hay eventos asociados al lugar ID %.', OLD.id;
+    ELSE
+        BEGIN
+            -- Actualizar el estado a "cancelado" y establecer lugar_id a NULL
+            UPDATE evento 
+            SET estado = 'cancelado', lugar_id = NULL
+            WHERE lugar_id = OLD.id;
+
+            RAISE NOTICE 'Se actualizaron % eventos asociados al lugar ID %.', eventos_count, OLD.id;
+        EXCEPTION
+            WHEN foreign_key_violation THEN
+                RAISE NOTICE 'No se pudo actualizar eventos debido a una violación de clave foránea para el lugar ID %.', OLD.id;
+            WHEN OTHERS THEN
+                RAISE NOTICE 'Error desconocido al actualizar eventos para el lugar ID %: %', OLD.id, SQLERRM;
+        END;
+    END IF;
+
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
 
 ------------triggers------------------------------------------------------------
 
@@ -1164,59 +1202,9 @@ $$;
 
 
 
-CREATE OR REPLACE FUNCTION cancelar_eventos_por_lugar()
-RETURNS TRIGGER AS $$
-DECLARE
-    eventos_count INTEGER;
-BEGIN
-    -- Contar los eventos asociados al lugar
-    SELECT COUNT(*) INTO eventos_count 
-    FROM evento 
-    WHERE lugar_id = OLD.id;
-
-    IF eventos_count = 0 THEN
-        RAISE NOTICE 'No se modificaron eventos porque no hay eventos asociados al lugar ID %.', OLD.id;
-    ELSE
-        BEGIN
-            -- Actualizar el estado a "cancelado" y establecer lugar_id a NULL
-            UPDATE evento 
-            SET estado = 'cancelado', lugar_id = NULL
-            WHERE lugar_id = OLD.id;
-
-            RAISE NOTICE 'Se actualizaron % eventos asociados al lugar ID %.', eventos_count, OLD.id;
-        EXCEPTION
-            WHEN foreign_key_violation THEN
-                RAISE NOTICE 'No se pudo actualizar eventos debido a una violación de clave foránea para el lugar ID %.', OLD.id;
-            WHEN OTHERS THEN
-                RAISE NOTICE 'Error desconocido al actualizar eventos para el lugar ID %: %', OLD.id, SQLERRM;
-        END;
-    END IF;
-
-    RETURN OLD;
-END;
-$$ LANGUAGE plpgsql;
 
 
--- TRIGGER PARA EJECUTAR LA FUNCION ANTERIOR AL ELIMINAR UN LUGAR
-CREATE TRIGGER trigger_cancelar_eventos_por_lugar
-BEFORE DELETE ON lugar
-FOR EACH ROW
-EXECUTE FUNCTION cancelar_eventos_por_lugar();
 
--- Trigger ocupacion_asiento: cuando se elimina un evento tambien se elimina la ocupacion de asiento
 
-CREATE OR REPLACE FUNCTION eliminar_ocupacion_asientos()
-RETURNS TRIGGER AS $$
-BEGIN
-    -- Eliminar las ocupaciones de asiento asociadas al evento que se elimina
-    DELETE FROM ocupacion_asientos
-    WHERE id_evento = OLD.id;
 
-    RETURN OLD;  
-END;
-$$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trigger_eliminar_ocupacion_asientos
-BEFORE DELETE ON evento
-FOR EACH ROW
-EXECUTE FUNCTION eliminar_ocupacion_asientos();
