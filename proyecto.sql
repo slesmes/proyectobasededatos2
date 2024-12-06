@@ -914,7 +914,7 @@ END $$;
 
 ---- CRUD ARTISTA -----
 
-CREATE OR REPLACE PROCEDURE crear_artista(
+CREATE OR REPLACE PROCEDURE proyecto.crear_artista(
     p_id VARCHAR,
     p_nombre VARCHAR,
     p_genero_musical VARCHAR
@@ -933,7 +933,11 @@ EXCEPTION
 END;
 $$;
 
-CREATE OR REPLACE PROCEDURE modificar_artista(
+select * from artista
+SELECT txid_current(), state FROM pg_stat_activity WHERE state = 'active';
+
+
+CREATE OR REPLACE PROCEDURE proyecto.modificar_artista(
     p_id VARCHAR,
     p_nombre VARCHAR,
     p_genero_musical VARCHAR
@@ -956,7 +960,7 @@ END;
 $$;
 
 
-CREATE OR REPLACE PROCEDURE eliminar_artista(
+CREATE OR REPLACE PROCEDURE proyecto.eliminar_artista(
     p_id VARCHAR
 )
 LANGUAGE plpgsql AS $$
