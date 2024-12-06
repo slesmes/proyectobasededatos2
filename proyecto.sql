@@ -517,9 +517,9 @@ RETURNS TABLE (
     estado VARCHAR,
     cartel VARCHAR,
     lugar_nombre VARCHAR,
-    precios_vip NUMERIC[],
-    precios_palco NUMERIC[],
-    precios_general NUMERIC[]
+    precio_vip NUMERIC,
+    precio_palco NUMERIC,
+    precio_general NUMERIC
 )
 LANGUAGE plpgsql AS $$ 
 BEGIN
@@ -533,26 +533,27 @@ BEGIN
            e.estado, 
            e.cartel, 
            l.nombre AS lugar_nombre,
-           -- Precios de asientos VIP
-           ARRAY(SELECT a.precio 
-                 FROM asiento a 
-                 JOIN ocupacion_asientos oa ON a.id = oa.id_asiento
-                 WHERE a.tipo = 'VIP' AND oa.id_evento = e.id) AS precios_vip,
-           -- Precios de asientos Palco
-           ARRAY(SELECT a.precio 
-                 FROM asiento a 
-                 JOIN ocupacion_asientos oa ON a.id = oa.id_asiento
-                 WHERE a.tipo = 'Palco' AND oa.id_evento = e.id) AS precios_palco,
-           -- Precios de asientos Generales
-           ARRAY(SELECT a.precio 
-                 FROM asiento a 
-                 JOIN ocupacion_asientos oa ON a.id = oa.id_asiento
-                 WHERE a.tipo = 'General' AND oa.id_evento = e.id) AS precios_general
+           -- Precio de asiento VIP (puede ser MIN, MAX, AVG según lo que necesites)
+           (SELECT AVG(a.precio) 
+            FROM asiento a 
+            JOIN ocupacion_asientos oa ON a.id = oa.id_asiento AND oa.id_evento = e.id
+            WHERE a.tipo = 'VIP') AS precio_vip,
+           -- Precio de asiento Palco
+           (SELECT AVG(a.precio) 
+            FROM asiento a 
+            JOIN ocupacion_asientos oa ON a.id = oa.id_asiento AND oa.id_evento = e.id
+            WHERE a.tipo = 'Palco') AS precio_palco,
+           -- Precio de asiento General
+           (SELECT AVG(a.precio) 
+            FROM asiento a 
+            JOIN ocupacion_asientos oa ON a.id = oa.id_asiento AND oa.id_evento = e.id
+            WHERE a.tipo = 'General') AS precio_general
     FROM evento e
     JOIN lugar l ON e.lugar_id = l.id
     WHERE e.fecha = p_fecha;
 END;
 $$;
+
 
 
 select 
@@ -572,19 +573,43 @@ RETURNS TABLE (
     estado VARCHAR,
     cartel VARCHAR,
     lugar_nombre VARCHAR,
-    precio NUMERIC
+    precio_vip NUMERIC,
+    precio_palco NUMERIC,
+    precio_general NUMERIC
 )
 LANGUAGE plpgsql AS $$
 BEGIN
     RETURN QUERY
-    SELECT e.id, e.nombre, e.fecha, e.hora, e.descripcion, e.genero_musical, e.estado, e.cartel, l.nombre AS lugar_nombre, a.precio
+    SELECT e.id, 
+           e.nombre, 
+           e.fecha, 
+           e.hora, 
+           e.descripcion, 
+           e.genero_musical, 
+           e.estado, 
+           e.cartel, 
+           l.nombre AS lugar_nombre,
+           -- Precio promedio de asiento VIP
+           (SELECT AVG(a.precio) 
+            FROM asiento a 
+            JOIN ocupacion_asientos oa ON a.id = oa.id_asiento AND oa.id_evento = e.id
+            WHERE a.tipo = 'vip') AS precio_vip,
+           -- Precio promedio de asiento Palco
+           (SELECT AVG(a.precio) 
+            FROM asiento a 
+            JOIN ocupacion_asientos oa ON a.id = oa.id_asiento AND oa.id_evento = e.id
+            WHERE a.tipo = 'palco') AS precio_palco,
+           -- Precio promedio de asiento General
+           (SELECT AVG(a.precio) 
+            FROM asiento a 
+            JOIN ocupacion_asientos oa ON a.id = oa.id_asiento AND oa.id_evento = e.id
+            WHERE a.tipo = 'general') AS precio_general
     FROM evento e
     JOIN lugar l ON e.lugar_id = l.id
-    JOIN ocupacion_asientos oa ON e.id = oa.id_evento
-    JOIN asiento a ON oa.id_asiento = a.id
     WHERE e.lugar_id = p_lugar_id;
 END;
 $$;
+
 
 CREATE OR REPLACE FUNCTION proyecto.buscar_eventos_por_artista(
     p_artista_id VARCHAR
@@ -599,21 +624,49 @@ RETURNS TABLE (
     estado VARCHAR,
     cartel VARCHAR,
     lugar_nombre VARCHAR,
-    precio NUMERIC
+    precio_vip NUMERIC,
+    precio_palco NUMERIC,
+    precio_general NUMERIC
 )
 LANGUAGE plpgsql AS $$
 BEGIN
     RETURN QUERY
-    SELECT e.id, e.nombre, e.fecha, e.hora, e.descripcion, e.genero_musical, e.estado, e.cartel, l.nombre AS lugar_nombre, a.precio
+    SELECT 
+        e.id, 
+        e.nombre, 
+        e.fecha, 
+        e.hora, 
+        e.descripcion, 
+        e.genero_musical, 
+        e.estado, 
+        e.cartel, 
+        l.nombre AS lugar_nombre,
+        -- Precio del primer asiento de tipo VIP
+        (SELECT a.precio 
+         FROM asiento a 
+         JOIN ocupacion_asientos oa ON a.id = oa.id_asiento AND oa.id_evento = e.id
+         WHERE a.tipo = 'vip'
+         LIMIT 1) AS precio_vip,
+        -- Precio del primer asiento de tipo Palco
+        (SELECT a.precio 
+         FROM asiento a 
+         JOIN ocupacion_asientos oa ON a.id = oa.id_asiento AND oa.id_evento = e.id
+         WHERE a.tipo = 'palco'
+         LIMIT 1) AS precio_palco,
+        -- Precio del primer asiento de tipo General
+        (SELECT a.precio 
+         FROM asiento a 
+         JOIN ocupacion_asientos oa ON a.id = oa.id_asiento AND oa.id_evento = e.id
+         WHERE a.tipo = 'general'
+         LIMIT 1) AS precio_general
     FROM evento e
     JOIN lugar l ON e.lugar_id = l.id
     JOIN evento_detallado ed ON e.id = ed.id_evento
     JOIN artista ar ON ed.id_artista = ar.id
-    JOIN ocupacion_asientos oa ON e.id = oa.id_evento
-    JOIN asiento a ON oa.id_asiento = a.id
     WHERE ar.id = p_artista_id;
 END;
 $$;
+
 
 
 ---- funciones con return query-----------------------------------------------
