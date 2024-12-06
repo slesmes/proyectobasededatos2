@@ -42,6 +42,10 @@ create sequence id_ticket
 	start with 1
 	increment by 1;
 
+create sequence id_detalle_factura
+	start with 1
+	increment by 1;
+
 
 --------------------fin secuencias---------------------------
 
@@ -148,8 +152,26 @@ create table metodo_pago(
 
 create table factura(
 	id varchar primary key,
-	detalle xml
+	fecha_emision Date,
+	total numeric,
+	id_metodo_pago varchar,
+	id_cliente varchar,
+	cantidad numeric,
+	
+	foreign key(id_metodo_pago) references metodo_pago(id),
+	foreign key(id_cliente) references cliente(id)
 );
+
+create table detalle_factura(
+
+	id varchar primary key,
+	id_ticket varchar,
+	id_factura varchar,
+	
+	foreign key(id_ticket) references ticket(id),
+	foreign key(id_factura) references factura(id)
+);
+
 
 CREATE TABLE ocupacion_asientos (
     id_asiento VARCHAR,
@@ -161,6 +183,20 @@ CREATE TABLE ocupacion_asientos (
 );
 
 ----- fin creacion de tablas ---------------------------------------
+
+CREATE OR REPLACE PROCEDURE insertar_metodos_pago()
+LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO metodo_pago (id, tipo_pago)
+    VALUES
+        ('metodo_pago_001', 'efectivo'),
+        ('metodo_pago_002', 'efectivo y tarjeta de credito'),
+        ('metodo_pago_003', 'efectivo y tarjeta de credito conciertosya'),
+        ('metodo_pago_004', 'tarjeta de credito y tarjeta conciertosya');
+
+    RAISE NOTICE 'Métodos de pago insertados correctamente.';
+END $$;
+
 
 create or replace PROCEDURE insertar_artistas()
 language plpgsql as $$
@@ -472,10 +508,10 @@ select * from obtener_precio_asiento('1')
 
 
 ---- funciones con return query-----------------------------------------------
-CREATE TRIGGER crear_factura_trigger
-AFTER INSERT ON ticket
-FOR EACH ROW
-EXECUTE FUNCTION crear_factura();
+--CREATE TRIGGER crear_factura_trigger
+--AFTER INSERT ON ticket
+--FOR EACH ROW
+--EXECUTE FUNCTION crear_factura();
 
 CREATE TRIGGER trigger_eliminar_eventos_detallados_a
 BEFORE DELETE ON artista
@@ -508,33 +544,59 @@ FOR EACH ROW
 EXECUTE FUNCTION cancelar_eventos_por_lugar();
 
 
-CREATE OR REPLACE FUNCTION crear_factura()
-RETURNS TRIGGER
-LANGUAGE plpgsql AS $$
+
+CREATE OR REPLACE PROCEDURE actualizar_factura(id_factura_param VARCHAR)
+AS $$
 DECLARE
-    nombre_cliente TEXT;
+    total_factura NUMERIC;
+    cantidad_tickets INTEGER;
 BEGIN
 
-    SELECT nombre INTO nombre_cliente
-    FROM cliente
-    WHERE id = NEW.id_cliente;
+    SELECT COALESCE(SUM(t.precio_descuento), 0)
+    INTO total_factura
+    FROM ticket t
+    INNER JOIN detalle_factura df ON t.id = df.id_ticket
+    WHERE df.id_factura = id_factura_param;
+
+    SELECT COUNT(*)
+    INTO cantidad_tickets
+    FROM detalle_factura
+    WHERE id_factura = id_factura_param;
+
+    UPDATE factura
+    SET total = total_factura,
+        cantidad = cantidad_tickets
+    WHERE id = id_factura_param;
+END;
+$$ LANGUAGE plpgsql;
 
 
-    INSERT INTO factura (id, detalle)
+
+
+
+CREATE OR REPLACE FUNCTION crear_factura(id_cliente_param VARCHAR)
+RETURNS VARCHAR AS $$
+DECLARE
+    id_factura_generado VARCHAR;
+BEGIN
+
+    id_factura_generado := 'FAC-' || NEXTVAL('id_factura');
+    
+    INSERT INTO factura (id, fecha_emision, total, id_metodo_pago, id_cliente, cantidad)
     VALUES (
-        nextval('id_factura'), 
-        XMLPARSE(
-            DOCUMENT '<detalle>' ||
-                '<cliente>' || nombre_cliente || '</cliente>' ||
-                '<fecha_emision>' || CURRENT_DATE || '</fecha_emision>' ||
-                '<total>0</total>' ||
-                '<metodo_pago>efectivo</metodo_pago>' ||
-            '</detalle>'
-        )
+        id_factura_generado,
+        CURRENT_DATE,
+        0,
+        NULL,
+        id_cliente_param,
+        0
     );
+    
+    RETURN id_factura_generado;
+END;
+$$ LANGUAGE plpgsql;
 
-    RETURN NEW;
-END $$;
+
 
 CREATE OR REPLACE FUNCTION eliminar_eventos_detallados_a()
 RETURNS TRIGGER AS $$
@@ -729,6 +791,72 @@ BEGIN
 
 END $$;
 
+CREATE OR REPLACE PROCEDURE crear_ticket_y_detalle_factura(
+    id_factura_param VARCHAR,
+    id_asiento_param VARCHAR,
+    id_cliente_param VARCHAR,
+    id_evento_param VARCHAR
+)
+LANGUAGE plpgsql AS $$
+DECLARE
+    id_ticket_generado VARCHAR;
+    id_detalle_factura_generado VARCHAR;
+    precio_base_v NUMERIC;
+    descuento_aplicado_v NUMERIC;
+    precio_final_v NUMERIC;
+    estado_asiento VARCHAR;
+BEGIN
+    SELECT estado INTO estado_asiento
+    FROM asiento
+    WHERE id = id_asiento_param;
+
+    IF estado_asiento = 'vendido' OR estado_asiento = 'reservado' THEN
+        RAISE EXCEPTION 'El asiento con ID % no está disponible (estado: %)', id_asiento_param, estado_asiento;
+    END IF;
+
+    SELECT precio_base, descuento_aplicado, precio_final
+    INTO precio_base_v, descuento_aplicado_v, precio_final_v
+    FROM obtener_precio_asiento(id_asiento_param);
+
+    id_ticket_generado := 'TICKET-' || NEXTVAL('id_ticket');
+
+    INSERT INTO ticket (id, fecha_compra, descuento, precio, precio_descuento, id_asiento, id_cliente, id_evento)
+    VALUES (
+        id_ticket_generado,
+        CURRENT_DATE,
+        descuento_aplicado_v,
+        precio_base_v,
+        precio_final_v,
+        id_asiento_param,
+        id_cliente_param,
+        id_evento_param
+    );
+
+    UPDATE asiento SET estado = 'vendido' WHERE id = id_asiento_param;
+    UPDATE ocupacion_asientos SET estado = 'vendido' WHERE id_asiento = id_asiento_param;
+
+    id_detalle_factura_generado := 'DF-' || NEXTVAL('id_detalle_factura');
+
+    INSERT INTO detalle_factura (id, id_ticket, id_factura)
+    VALUES (
+        id_detalle_factura_generado,
+        id_ticket_generado,
+        id_factura_param
+    );
+END;
+$$;
+
+
+
+
+SELECT crear_factura('1');
+call crear_ticket_y_detalle_factura('FAC-2','29','1','1')
+call actualizar_factura('FAC-2')
+call actualizar_metodo_pago_factura('FAC-2','1')
+
+
+
+select * from detalle_factura df 
 CALL crear_ticket('1', '1', '1', '30');
 
 update asiento set estado = 'disponible' where id = '1';
@@ -737,41 +865,30 @@ select * from ticket;
 delete from ticket where id = '1'; 
 select * from inventario i where id = '1';
 select * from factura;
+select * from asiento a 
+select * from metodo_pago mp 
 
 -------------------funciones del ticket----------------------
 
 CREATE OR REPLACE PROCEDURE actualizar_metodo_pago_factura(
-    p_id_cliente VARCHAR,
-    p_fecha DATE,
+    p_id_factura VARCHAR,
     p_metodo_pago VARCHAR
 )
 LANGUAGE plpgsql AS $$
 DECLARE
-    factura_id VARCHAR;
-	v_metodo_pago varchar;
+    v_metodo_pago VARCHAR;
 BEGIN
+    SELECT * INTO v_metodo_pago FROM obtener_tipo_pago(p_metodo_pago);
 
-    SELECT id INTO factura_id
-    FROM factura
-    WHERE detalle::text LIKE '%' || p_id_cliente || '%'
-      AND detalle::text LIKE '%' || p_fecha || '%'
-    ORDER BY id DESC
-    LIMIT 1;
-
-    IF factura_id IS NOT NULL THEN
-		select * into v_metodo_pago from obtener_tipo_pago(p_metodo_pago);
+    IF EXISTS (SELECT 1 FROM factura WHERE id = p_id_factura) THEN
         UPDATE factura
-        SET detalle = XMLPARSE(
-            DOCUMENT REPLACE(
-                detalle::text,
-                '<metodo_pago>efectivo</metodo_pago>',
-                '<metodo_pago>' || v_metodo_pago || '</metodo_pago>'
-            )
-        )
-        WHERE id = factura_id;
+        SET id_metodo_pago = p_metodo_pago
+        WHERE id = p_id_factura;
     ELSE
-        RAISE NOTICE 'No se encontró una factura para el cliente % en la fecha %', p_id_cliente, p_fecha;
+        RAISE EXCEPTION 'No se encontró la factura con el ID: %', p_id_factura;
     END IF;
+    
+    RAISE NOTICE 'Factura % actualizada con el nuevo método de pago: %', p_id_factura, v_metodo_pago;
 END $$;
 
 ---------------------funciones de la factura------------------------------------------------
