@@ -2,33 +2,31 @@ package org.models;
 
 import org.connection.ConexionPostgres;
 
-import java.sql.CallableStatement;
-import java.sql.Connection;
-import java.sql.SQLException;
+import java.sql.*;
 
 public class Asiento {
 
     // Método para crear un asiento
     public void crearAsiento(String id, String codigo, String fila, String columna, double precio, double descuento, String tipo, String estado, String idLugar) {
-    String sql = "call proyecto.crear_asiento(?, ?, ?, ?, CAST(? AS NUMERIC), CAST(? AS NUMERIC), ?, ?, ?)";
-    try (Connection conn = ConexionPostgres.getConnection(); CallableStatement stmt = conn.prepareCall(sql)) {
+        String sql = "call proyecto.crear_asiento(?, ?, ?, ?, CAST(? AS NUMERIC), CAST(? AS NUMERIC), ?, ?, ?)";
+        try (Connection conn = ConexionPostgres.getConnection(); CallableStatement stmt = conn.prepareCall(sql)) {
 
-        stmt.setString(1, id);
-        stmt.setString(2, codigo);
-        stmt.setString(3, fila);
-        stmt.setString(4, columna);
-        stmt.setDouble(5, precio);
-        stmt.setDouble(6, descuento);
-        stmt.setString(7, tipo);
-        stmt.setString(8, estado);
-        stmt.setString(9, idLugar);
+            stmt.setString(1, id);
+            stmt.setString(2, codigo);
+            stmt.setString(3, fila);
+            stmt.setString(4, columna);
+            stmt.setDouble(5, precio);
+            stmt.setDouble(6, descuento);
+            stmt.setString(7, tipo);
+            stmt.setString(8, estado);
+            stmt.setString(9, idLugar);
 
-        stmt.execute();
-        System.out.println("Asiento creado con éxito.");
-    } catch (SQLException e) {
-        System.err.println("Error al crear asiento: " + e.getMessage());
+            stmt.execute();
+            System.out.println("Asiento creado con éxito.");
+        } catch (SQLException e) {
+            System.err.println("Error al crear asiento: " + e.getMessage());
+        }
     }
-}
 
 
     // Método para modificar un asiento
@@ -67,4 +65,43 @@ public class Asiento {
             System.err.println("Error al eliminar asiento: " + e.getMessage());
         }
     }
+
+    public void leerAsientosDisponiblesPorEvento(String eventoId) {
+        String sql = "SELECT * FROM proyecto.obtener_asientos_disponibles_por_evento(?)";
+        try (Connection conn = ConexionPostgres.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+
+            stmt.setString(1, eventoId);
+
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                System.out.println("Asientos disponibles para el evento ID: " + eventoId);
+                System.out.println("----------------------------------------------------");
+
+                boolean hayResultados = false;
+
+                while (rs.next()) {
+                    hayResultados = true;
+                    System.out.println("Asiento ID: " + rs.getString("id"));
+                    System.out.println("Código: " + rs.getString("codigo"));
+                    System.out.println("Fila: " + rs.getString("fila"));
+                    System.out.println("Columna: " + rs.getString("columna"));
+                    System.out.println("Precio: " + rs.getBigDecimal("precio"));
+                    System.out.println("Descuento: " + rs.getBigDecimal("descuento"));
+                    System.out.println("Tipo: " + rs.getString("tipo"));
+                    System.out.println("Estado: " + rs.getString("estado"));
+                    System.out.println("----------------------------------------------------");
+                }
+
+                if (!hayResultados) {
+                    System.out.println("No se encontraron asientos disponibles para el evento con ID: " + eventoId);
+                }
+            }
+
+        } catch (SQLException e) {
+            System.err.println("Error al obtener los asientos disponibles: " + e.getMessage());
+        }
+    }
+
 }

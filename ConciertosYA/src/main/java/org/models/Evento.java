@@ -7,20 +7,19 @@ import java.sql.*;
 public class Evento {
 
     // Método para crear un evento
-    public void crearEvento(String id, String nombre, String fecha, String hora, String descripcion,
+    public void crearEvento(String nombre, String fecha, String hora, String descripcion,
             String generoMusical, String estado, String cartel, String lugarId) {
-        String sql = "call proyecto.crear_evento(?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        String sql = "call proyecto.crear_evento(?, ?, ?, ?, ?, ?, ?, ?)";
         try (Connection conn = ConexionPostgres.getConnection(); CallableStatement stmt = conn.prepareCall(sql)) {
 
-            stmt.setString(1, id);
-            stmt.setString(2, nombre);
-            stmt.setDate(3, java.sql.Date.valueOf(fecha)); // Formato YYYY-MM-DD
-            stmt.setTime(4, java.sql.Time.valueOf(hora));  // Formato HH:mm:ss
-            stmt.setString(5, descripcion);
-            stmt.setString(6, generoMusical);
-            stmt.setString(7, estado);
-            stmt.setString(8, cartel);
-            stmt.setString(9, lugarId);
+            stmt.setString(1, nombre);
+            stmt.setDate(2, java.sql.Date.valueOf(fecha)); // Formato YYYY-MM-DD
+            stmt.setTime(3, java.sql.Time.valueOf(hora));  // Formato HH:mm:ss
+            stmt.setString(4, descripcion);
+            stmt.setString(5, generoMusical);
+            stmt.setString(6, estado);
+            stmt.setString(7, cartel);
+            stmt.setString(8, lugarId);
 
             stmt.execute();
             SQLWarning warning = stmt.getWarnings();
@@ -79,6 +78,25 @@ public class Evento {
             }
         } catch (SQLException e) {
             System.err.println("Error al eliminar evento: " + e.getMessage());
+        }
+    }
+
+    // Método para añadir artista a evento
+    public void agregarArtistaEvento(String eventoId, String artistaId) {
+        String sql = "call proyecto.crear_evento_detallado(?, ?)";
+        try (Connection conn = ConexionPostgres.getConnection(); CallableStatement stmt = conn.prepareCall(sql)) {
+
+            stmt.setString(1, eventoId);
+            stmt.setString(2, artistaId);
+            stmt.execute();
+            SQLWarning warning = stmt.getWarnings();
+            if (warning != null) {
+                System.out.println("Aviso: " + warning.getMessage());
+            } else {
+                System.out.println("Artista agregado al evento con éxito.");
+            }
+        } catch (SQLException e) {
+            System.err.println("Error al agregar artista al evento: " + e.getMessage());
         }
     }
 
@@ -178,5 +196,27 @@ public class Evento {
             System.err.println("Error al buscar eventos por artista: " + e.getMessage());
         }
     }
+
+    public void leerEventosProgramados() {
+        String sql = "SELECT * FROM proyecto.leer_evento()";
+        try (Connection conn = ConexionPostgres.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql);
+             ResultSet rs = stmt.executeQuery()) {
+
+            System.out.println("Eventos programados:");
+            System.out.println("----------------------------------------------------");
+
+            while (rs.next()) {
+                System.out.println("Evento ID: " + rs.getString("id"));
+                System.out.println("Nombre: " + rs.getString("nombre"));
+                System.out.println("Género Musical: " + rs.getString("genero_musical"));
+                System.out.println("----------------------------------------------------");
+            }
+
+        } catch (SQLException e) {
+            System.err.println("Error al leer eventos programados: " + e.getMessage());
+        }
+    }
+
 
 }

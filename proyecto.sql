@@ -730,6 +730,8 @@ BEFORE DELETE ON artista
 FOR EACH ROW
 EXECUTE FUNCTION eliminar_eventos_detallados_a();
 
+
+
 CREATE OR REPLACE FUNCTION eliminar_eventos_detallados_a()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -757,6 +759,63 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+CREATE TRIGGER trigger_generar_asientos_con_descuento
+AFTER INSERT ON proyecto.lugar
+FOR EACH ROW
+EXECUTE FUNCTION proyecto.generar_asientos_con_descuento();
+
+CREATE OR REPLACE FUNCTION proyecto.generar_asientos_con_descuento()
+RETURNS TRIGGER AS $$
+DECLARE
+    i INT;
+    fila CHAR := 'A';
+    columna INT := 1;
+    capacidad_lugar INT := NEW.capacidad;
+    tipo_asiento VARCHAR;
+    precio NUMERIC;
+    descuento NUMERIC;
+BEGIN
+    FOR i IN 1..capacidad_lugar LOOP
+        -- Determinar tipo de asiento y sus propiedades según posición
+        IF i <= capacidad_lugar * 0.1 THEN
+            tipo_asiento := 'palco';  -- Primeros 10% de los asientos son 'palco'
+            precio := 50000;
+            descuento := 0.1;
+        ELSIF i <= capacidad_lugar * 0.3 THEN
+            tipo_asiento := 'vip';  -- Siguientes 20% son 'vip'
+            precio := 30000;
+            descuento := 0.05;
+        ELSE
+            tipo_asiento := 'general';  -- El resto de los asientos son 'general'
+            precio := 20000;
+            descuento := 0.0;
+        END IF;
+
+        -- Insertar asiento con estado "disponible"
+        INSERT INTO proyecto.asiento (id, codigo, fila, columna, precio, descuento, tipo, estado, id_lugar)
+        VALUES (
+            nextval('id_asiento'),            -- ID generado por secuencia
+            'AS-' || NEW.id || '-' || i,     -- Código único
+            fila,                            -- Fila
+            columna,                         -- Columna
+            precio,                          -- Precio
+            descuento,                       -- Descuento
+            tipo_asiento,                    -- Tipo de asiento
+            'disponible',                    -- Estado inicial fijo
+            NEW.id                           -- ID del lugar
+        );
+
+        -- Actualizar fila y columna
+        columna := columna + 1;
+        IF columna > 10 THEN
+            columna := 1;
+            fila := CHR(ASCII(fila) + 1); -- Avanzar a la siguiente fila
+        END IF;
+    END LOOP;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
 CREATE TRIGGER trigger_eliminar_eventos_detallados_e
 BEFORE DELETE ON evento
@@ -1083,17 +1142,16 @@ END $$;
 -- CRUD ARTISTAS ----------------------------------------------------------
 
 CREATE OR REPLACE PROCEDURE proyecto.crear_artista(
-    p_id VARCHAR,
     p_nombre VARCHAR,
     p_genero_musical VARCHAR
 )
 LANGUAGE plpgsql AS $$
 BEGIN
     INSERT INTO proyecto.artista (id, nombre, genero_musical)
-    VALUES (p_id, p_nombre, p_genero_musical);
+    VALUES (nextval('id_artista'), p_nombre, p_genero_musical);
 EXCEPTION
     WHEN unique_violation THEN
-        RAISE NOTICE 'Error: Ya existe un artista con el ID %', p_id;
+        RAISE NOTICE 'Error: Ya existe un artista con el ID generado.';
     WHEN check_violation THEN
         RAISE NOTICE 'Error: El género musical % no es válido.', p_genero_musical;
     WHEN OTHERS THEN
@@ -1162,24 +1220,47 @@ $$;
 
 -- CRUD EVENTO DETALLADO
 
-CREATE OR REPLACE PROCEDURE crear_evento_detallado(
-    p_id VARCHAR,
+CREATE OR REPLACE PROCEDURE proyecto.crear_evento_detallado(
     p_id_evento VARCHAR,
     p_id_artista VARCHAR
 )
 LANGUAGE plpgsql AS $$
+DECLARE
+    v_genero_evento VARCHAR;
+    v_genero_artista VARCHAR;
 BEGIN
-    INSERT INTO evento_detallado (id, id_evento, id_artista)
-    VALUES (p_id, p_id_evento, p_id_artista);
+    SELECT genero_musical
+    INTO v_genero_evento
+    FROM proyecto.evento
+    WHERE id = p_id_evento;
+
+    SELECT genero_musical
+    INTO v_genero_artista
+    FROM proyecto.artista
+    WHERE id = p_id_artista;
+
+    IF v_genero_evento IS DISTINCT FROM v_genero_artista THEN
+        RAISE EXCEPTION 'El género musical del artista (%) no coincide con el del evento (%).',
+                        v_genero_artista, v_genero_evento;
+    END IF;
+    INSERT INTO proyecto.evento_detallado (id, id_evento, id_artista)
+    VALUES (nextval('id_evento_detallado'), p_id_evento, p_id_artista);
+
 EXCEPTION
     WHEN foreign_key_violation THEN
         RAISE NOTICE 'Error: El ID de evento % o el ID de artista % no existen.', p_id_evento, p_id_artista;
     WHEN unique_violation THEN
-        RAISE NOTICE 'Error: Ya existe un evento detallado con el ID %', p_id;
+        RAISE NOTICE 'Error: Ya existe un evento detallado con el ID generado.';
     WHEN OTHERS THEN
-        RAISE NOTICE 'Error desconocido: %', SQLERRM;
+        RAISE NOTICE 'Error: %', SQLERRM;
 END;
 $$;
+
+
+select * from proyecto.evento e 
+select * from proyecto.evento_detallado ed 
+select * from proyecto.artista a 
+select * from proyecto.lugar l ;
 
 CREATE OR REPLACE PROCEDURE modificar_evento_detallado(
     p_id VARCHAR,
@@ -1225,7 +1306,6 @@ $$;
 -- CRUD EVENTO 
 
 CREATE OR REPLACE PROCEDURE proyecto.crear_evento(
-    p_id VARCHAR,
     p_nombre VARCHAR,
     p_fecha DATE,
     p_hora TIME,
@@ -1238,10 +1318,10 @@ CREATE OR REPLACE PROCEDURE proyecto.crear_evento(
 LANGUAGE plpgsql AS $$
 BEGIN
     INSERT INTO proyecto.evento (id, nombre, fecha, hora, descripcion, genero_musical, estado, cartel, lugar_id)
-    VALUES (p_id, p_nombre, p_fecha, p_hora, p_descripcion, p_genero_musical, p_estado, p_cartel, p_lugar_id);
+    VALUES (nextval('id_evento'), p_nombre, p_fecha, p_hora, p_descripcion, p_genero_musical, p_estado, p_cartel, p_lugar_id);
 EXCEPTION
     WHEN unique_violation THEN
-        RAISE NOTICE 'Error: Ya existe un evento con el ID %', p_id;
+        RAISE NOTICE 'Error: Ya existe un evento con el ID generado.';
     WHEN OTHERS THEN
         RAISE NOTICE 'Error desconocido al crear el evento: %', SQLERRM;
 END;
@@ -1297,8 +1377,21 @@ $$;
 
 -- CRUD LUGAR
 
+CREATE OR REPLACE PROCEDURE proyecto.leer_lugar(
+    p_id VARCHAR
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+    RAISE NOTICE 'Lugar: %', (SELECT row_to_json(lugar) FROM proyecto.lugar WHERE id = p_id);
+EXCEPTION
+    WHEN no_data_found THEN
+        RAISE NOTICE 'No se encontró un lugar con el ID %', p_id;
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Error al consultar el lugar: %', SQLERRM;
+END;
+$$;
+
 CREATE OR REPLACE PROCEDURE proyecto.crear_lugar(
-    p_id VARCHAR,
     p_nombre VARCHAR,
     p_direccion VARCHAR,
     p_capacidad INT,
@@ -1308,10 +1401,10 @@ CREATE OR REPLACE PROCEDURE proyecto.crear_lugar(
 LANGUAGE plpgsql AS $$
 BEGIN
     INSERT INTO proyecto.lugar (id, nombre, direccion, capacidad, ciudad, imagen)
-    VALUES (p_id, p_nombre, p_direccion, p_capacidad, p_ciudad, p_imagen);
+    VALUES (nextval('id_lugar'), p_nombre, p_direccion, p_capacidad, p_ciudad, p_imagen);
 EXCEPTION
     WHEN unique_violation THEN
-        RAISE NOTICE 'Error: Ya existe un lugar con el ID %', p_id;
+        RAISE NOTICE 'Error: Ya existe un lugar con el ID generado.';
     WHEN OTHERS THEN
         RAISE NOTICE 'Error desconocido al crear el lugar: %', SQLERRM;
 END;
@@ -1485,6 +1578,7 @@ EXCEPTION
 END;
 $$;
 
+
 CREATE OR REPLACE PROCEDURE proyecto.eliminar_cliente(
     p_id VARCHAR
 )
@@ -1570,7 +1664,7 @@ BEGIN
     WHERE id = id_factura;
 END;
 $$;
-select * from proyecto.ticket t ;
+
 CREATE OR REPLACE PROCEDURE eliminar_total_del_xml(
     id_factura VARCHAR  
 )

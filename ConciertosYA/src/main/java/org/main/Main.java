@@ -14,6 +14,7 @@ public class Main {
         Evento evento = new Evento();
         Lugar lugar = new Lugar();
         Asiento asiento = new Asiento();
+        Factura factura = new Factura();
 
         boolean continuar = true;
 
@@ -26,7 +27,7 @@ public class Main {
             System.out.println("2. Artistas");
             System.out.println("3. Eventos");
             System.out.println("4. Lugares");
-            System.out.println("5. Asientos");
+            System.out.println("5. Comprar asientos");
             System.out.println("6. Salir");
             System.out.print("Seleccione una opción: ");
 
@@ -124,13 +125,11 @@ public class Main {
                                 break;
 
                             case 2:  // Crear Artista
-                                System.out.print("Ingresa el ID del artista: ");
-                                String ArtistaId = scanner.nextLine();
                                 System.out.print("Ingresa el nombre del artista: ");
                                 String ArtistaNombre = scanner.nextLine();
                                 System.out.print("Escribe el género musical del artista (Salsa, Rock, Pop o Reguetton): ");
                                 String ArtistaGeneroMusical = scanner.nextLine().toLowerCase();
-                                artista.crearArtista(ArtistaId, ArtistaNombre, ArtistaGeneroMusical);
+                                artista.crearArtista(ArtistaNombre, ArtistaGeneroMusical);
                                 break;
 
                             case 3:  // Actualizar Artista
@@ -166,9 +165,10 @@ public class Main {
                         System.out.println("\nMenú Eventos:");
                         System.out.println("1. Consultar Evento");
                         System.out.println("2. Crear Evento");
-                        System.out.println("3. Actualizar Evento");
-                        System.out.println("4. Eliminar Evento");
-                        System.out.println("5. Volver al Menú Principal");
+                        System.out.println("3. Añadir artista a evento");
+                        System.out.println("4. Actualizar Evento");
+                        System.out.println("5. Eliminar Evento");
+                        System.out.println("6. Volver al Menú Principal");
                         System.out.print("Seleccione una opción: ");
 
                         int opcionEvento = scanner.nextInt();
@@ -219,8 +219,6 @@ public class Main {
                                 break;
 
                             case 2: // Crear Evento
-                                System.out.print("Ingresa el ID del evento: ");
-                                String eventoId = scanner.nextLine();
                                 System.out.print("Ingresa el nombre del evento: ");
                                 String eventoNombre = scanner.nextLine();
                                 System.out.print("Ingresa la fecha del evento (yyyy-MM-dd): ");
@@ -237,10 +235,19 @@ public class Main {
                                 String eventoCartel = scanner.nextLine();
                                 System.out.print("Ingresa el ID del lugar del evento: ");
                                 String lugarEventoId = scanner.nextLine();
-                                evento.crearEvento(eventoId, eventoNombre, eventoFecha, eventoHora, eventoDescripcion, eventoGeneroMusical, eventoEstado, eventoCartel, lugarEventoId);
+                                evento.crearEvento(eventoNombre, eventoFecha, eventoHora, eventoDescripcion, eventoGeneroMusical, eventoEstado, eventoCartel, lugarEventoId);
                                 break;
 
-                            case 3: // Actualizar Evento
+                            case 3: // Añadir artista a evento
+                                System.out.print("Ingresa el ID del evento: ");
+                                String eventoIdArtista = scanner.nextLine();
+                                System.out.print("Ingresa el ID del artista: ");
+                                String artistaIdEvento = scanner.nextLine();
+                                evento.agregarArtistaEvento(eventoIdArtista, artistaIdEvento);
+                                break;
+
+
+                            case 4: // Eliminar evento
                                 System.out.print("Ingresa el ID del evento a actualizar: ");
                                 String eventoIdActualizar = scanner.nextLine();
                                 System.out.print("Ingresa el nuevo nombre del evento: ");
@@ -249,7 +256,7 @@ public class Main {
                                 String eventoNuevaFecha = scanner.nextLine();
                                 System.out.println("Ingresa la nueva hora del evento (HH:mm:ss): ");
                                 String eventoNuevaHora = scanner.nextLine();
-                                System.out.print("Ingresa la nueva descripción del evento: ");
+                                System.out.print("Ingresa la nueva descripción del evento:  ");
                                 String eventoNuevaDescripcion = scanner.nextLine();
                                 System.out.print("Ingresa el nuevo género musical del evento (Salsa, Rock, Pop o Reguetton): ");
                                 String eventoNuevoGeneroMusical = scanner.nextLine().toLowerCase();
@@ -262,22 +269,181 @@ public class Main {
                                 evento.modificarEvento(eventoIdActualizar, eventoNuevoNombre, eventoNuevaFecha, eventoNuevaHora, eventoNuevaDescripcion, eventoNuevoGeneroMusical, eventoNuevoEstado, eventoNuevoCartel, eventoNuevoLugarId);
                                 break;
 
-                            case 4: // Eliminar Evento
+                            case 5: // Volver al Menú Principal
                                 System.out.print("Ingresa el ID del evento a eliminar: ");
                                 String eventoIdEliminar = scanner.nextLine();
                                 evento.eliminarEvento(eventoIdEliminar);
                                 break;
 
-                            case 5: // Volver al Menú Principal
+                            case 6:
                                 continuarEventos = false;
                                 break;
-
                             default:
                                 System.out.println("Opción no válida para Eventos.");
                                 break;
                         }
                     }
                     break;
+
+                case 4: // Menú Lugares
+                    boolean continuarLugares = true;
+                    while (continuarLugares) {
+                        System.out.println("\nMenú Lugares:");
+                        System.out.println("1. Consultar Lugar");
+                        System.out.println("2. Crear Lugar");
+                        System.out.println("3. Actualizar Lugar");
+                        System.out.println("4. Eliminar Lugar");
+                        System.out.println("5. Volver al Menú Principal");
+                        System.out.print("Seleccione una opción: ");
+
+                        int opcionLugar = scanner.nextInt();
+                        scanner.nextLine();
+
+                        switch (opcionLugar) {
+                            case 1: // Consultar Lugar
+                                System.out.print("Ingresa el ID del lugar a consultar: ");
+                                String lugarIdConsultar = scanner.nextLine();
+                                lugar.leerLugar(lugarIdConsultar);
+                                break;
+
+                            case 2: // Crear Lugar
+                                System.out.print("Ingresa el nombre del lugar: ");
+                                String lugarNombre = scanner.nextLine();
+                                System.out.print("Ingresa la dirección del lugar: ");
+                                String lugarDireccion = scanner.nextLine();
+                                System.out.print("Ingresa el aforo del lugar: ");
+                                int lugarAforo = Integer.parseInt(scanner.nextLine());
+                                System.out.print("Ingresa la ciudad donde se ubica el lugar: ");
+                                String ciudad = scanner.nextLine();
+                                System.out.print("Ingresa la imagen del lugar: ");
+                                String imagen = scanner.nextLine();
+                                lugar.crearLugar(lugarNombre, lugarDireccion, lugarAforo, ciudad, imagen);
+                                break;
+
+                            case 3: // Actualizar Lugar
+                                System.out.print("Ingresa el ID del lugar a actualizar: ");
+                                String lugarIdActualizar = scanner.nextLine();
+                                System.out.print("Ingresa el nuevo nombre del lugar: ");
+                                String nuevoNombreLugar = scanner.nextLine();
+                                System.out.print("Ingresa la nueva dirección del lugar: ");
+                                String nuevaDireccionLugar = scanner.nextLine();
+                                System.out.print("Ingresa el nuevo aforo del lugar: ");
+                                int nuevoLugarAforo = Integer.parseInt(scanner.nextLine());
+                                System.out.print("Ingresa la nueva ciudad donde se ubica el lugar: ");
+                                String nuevaCiudad = scanner.nextLine();
+                                System.out.print("Ingresa la nueva imagen del lugar: ");
+                                String nuevaImagen = scanner.nextLine();
+                                lugar.modificarLugar(lugarIdActualizar, nuevoNombreLugar, nuevaDireccionLugar, nuevoLugarAforo, nuevaCiudad, nuevaImagen);
+                                break;
+
+                            case 4: // Eliminar Lugar
+                                System.out.print("Ingresa el ID del lugar a eliminar: ");
+                                String lugarIdEliminar = scanner.nextLine();
+                                lugar.eliminarLugar(lugarIdEliminar);
+                                break;
+
+                            case 5:
+                                continuarLugares = false;
+                                break;
+
+                            default:
+                                System.out.println("Opción no válida para Lugares.");
+                                break;
+                        }
+                    }
+                    break;
+
+                case 5: // Menú comprar asientos
+                    boolean continuarAsientos = true;
+                    while (continuarAsientos) {
+                        System.out.println("\nMenú Comprar Asientos:");
+                        System.out.println("1. Comprar asientos");
+                        System.out.println("2. Volver al menú principal");
+                        System.out.print("Seleccione una opción: ");
+
+                        int opcionAsiento = scanner.nextInt();
+                        scanner.nextLine();
+
+                        switch (opcionAsiento) {
+                            case 1: // Comprar asientos
+                                System.out.print("Ingresa el ID del cliente: ");
+                                String clienteId = scanner.nextLine();
+
+                                System.out.print("Eventos programados: ");
+                                evento.leerEventosProgramados();
+
+                                System.out.print("Ingresa el ID del evento de su interés: ");
+                                String eventoId = scanner.nextLine();
+
+                                System.out.print("Asientos disponibles: ");
+                                asiento.leerAsientosDisponiblesPorEvento(eventoId);
+
+                                System.out.print("¿Cuántos asientos desea comprar? ");
+                                int cantidadAsientos = Integer.parseInt(scanner.nextLine());
+
+                                String facturaId = factura.crearFactura(clienteId);
+
+                                for (int i = 0; i < cantidadAsientos; i++) {
+                                    System.out.print("Ingresa el ID del asiento: ");
+                                    String asientoId = scanner.nextLine();
+                                    factura.crearTicketYDetalleFactura(facturaId, asientoId, clienteId, eventoId);
+                                    factura.actualizarFactura(facturaId);
+                                }
+
+                                System.out.print("Seleccione el método de pago: ");
+                                boolean continuarMetodoPago = true;
+
+                                while (continuarMetodoPago) {
+                                    System.out.println("1. Efectivo");
+                                    System.out.println("2. Efectivo y tarjeta de crédito");
+                                    System.out.println("3. Efectivo y tarjeta de crédito ConciertosYa");
+                                    System.out.println("4. Tarjeta de crédito y tarjeta de crédito ConciertosYa");
+                                    System.out.print("Seleccione una opción: ");
+
+                                    String opcionMetodoPago = scanner.nextLine();
+
+                                    switch (opcionMetodoPago) {
+                                        case "1":
+                                            factura.actualizarMetodoPagoFactura(facturaId, "1");
+                                            continuarMetodoPago = false;
+                                            break;
+
+                                        case "2":
+                                            factura.actualizarMetodoPagoFactura(facturaId, "2");
+                                            continuarMetodoPago = false;
+                                            break;
+
+                                        case "3":
+                                            factura.actualizarMetodoPagoFactura(facturaId, "3");
+                                            continuarMetodoPago = false;
+                                            break;
+
+                                        case "4":
+                                            factura.actualizarMetodoPagoFactura(facturaId, "4");
+                                            continuarMetodoPago = false;
+                                            break;
+
+                                        default:
+                                            System.out.println("Opción no válida.");
+                                            break;
+                                    }
+                                }
+
+                                factura.actualizarDetallesFactura(facturaId);
+                                break;
+
+                            case 2: // Volver al menú principal
+                                continuarAsientos = false;
+                                break;
+
+                            default:
+                                System.out.println("Opción no válida. Intente de nuevo.");
+                                break;
+                        }
+                    }
+                    break;
+
+
 
                 case 6:  // Salir
                     continuar = false;

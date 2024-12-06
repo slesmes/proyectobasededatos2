@@ -11,13 +11,12 @@ import java.sql.SQLWarning;
 public class Artista {
 
     // Método para crear un artista
-    public void crearArtista(String id, String nombre, String generoMusical) {
-        String sql = "call proyecto.crear_artista(?, ?, ?)";
+    public void crearArtista(String nombre, String generoMusical) {
+        String sql = "call proyecto.crear_artista(?, ?)";
         try (Connection conn = ConexionPostgres.getConnection(); CallableStatement stmt = conn.prepareCall(sql)) {
 
-            stmt.setString(1, id);
-            stmt.setString(2, nombre);
-            stmt.setString(3, generoMusical);
+            stmt.setString(1, nombre);
+            stmt.setString(2, generoMusical);
             stmt.execute();
             SQLWarning warning = stmt.getWarnings();
             if (warning != null) {
