@@ -150,17 +150,18 @@ create table metodo_pago(
 	tipo_pago varchar check (tipo_pago in ('efectivo', 'efectivo y tarjeta de credito', 'efectivo y tarjeta de credito conciertosya', 'tarjeta de credito y tarjeta conciertosya'))
 );
 
-create table factura(
-	id varchar primary key,
-	fecha_emision Date,
-	total numeric,
-	id_metodo_pago varchar,
-	id_cliente varchar,
-	cantidad numeric,
-	
-	foreign key(id_metodo_pago) references metodo_pago(id),
-	foreign key(id_cliente) references cliente(id)
+CREATE TABLE factura (
+    id VARCHAR PRIMARY KEY,
+    fecha_emision DATE,
+    total NUMERIC,
+    id_metodo_pago VARCHAR,
+    id_cliente VARCHAR,
+    cantidad NUMERIC,
+    detalles XML, -- Campo para almacenar datos en formato XML
+    FOREIGN KEY (id_metodo_pago) REFERENCES metodo_pago(id),
+    FOREIGN KEY (id_cliente) REFERENCES cliente(id)
 );
+
 
 create table detalle_factura(
 
@@ -171,7 +172,6 @@ create table detalle_factura(
 	foreign key(id_ticket) references ticket(id),
 	foreign key(id_factura) references factura(id)
 );
-
 
 CREATE TABLE ocupacion_asientos (
     id_asiento VARCHAR,
@@ -189,13 +189,15 @@ LANGUAGE plpgsql AS $$
 BEGIN
     INSERT INTO metodo_pago (id, tipo_pago)
     VALUES
-        ('metodo_pago_001', 'efectivo'),
-        ('metodo_pago_002', 'efectivo y tarjeta de credito'),
-        ('metodo_pago_003', 'efectivo y tarjeta de credito conciertosya'),
-        ('metodo_pago_004', 'tarjeta de credito y tarjeta conciertosya');
+        ('1', 'efectivo'),
+        ('2', 'efectivo y tarjeta de credito'),
+        ('3', 'efectivo y tarjeta de credito conciertosya'),
+        ('4', 'tarjeta de credito y tarjeta conciertosya');
 
     RAISE NOTICE 'Métodos de pago insertados correctamente.';
 END $$;
+
+call insertar_metodos_pago() 
 
 
 create or replace PROCEDURE insertar_artistas()
@@ -849,12 +851,12 @@ $$;
 
 
 
-SELECT crear_factura('1');
-call crear_ticket_y_detalle_factura('FAC-2','29','1','1')
+SELECT crear_factura('2');
+call crear_ticket_y_detalle_factura('FAC-2','5','1','1');
 call actualizar_factura('FAC-2')
 call actualizar_metodo_pago_factura('FAC-2','1')
 
-
+call actualizar_detalles_factura('FAC-2') 
 
 select * from detalle_factura df 
 CALL crear_ticket('1', '1', '1', '30');
@@ -1291,10 +1293,7 @@ CREATE OR REPLACE PROCEDURE leer_cliente(
 )
 LANGUAGE plpgsql AS $$
 BEGIN
-    -- Consulta del cliente por su ID
     RAISE NOTICE 'Cliente: %', (SELECT row_to_json(cliente) FROM cliente WHERE id = p_id);
-    -- O si prefieres devolverlo en un conjunto de resultados, puedes usar SELECT
-    -- SELECT * FROM cliente WHERE id = p_id;
 EXCEPTION
     WHEN no_data_found THEN
         RAISE NOTICE 'No se encontró un cliente con el ID %', p_id;
@@ -1322,10 +1321,67 @@ $$;
 -- CRUD CLIENTES------------------------------------
 
 
+---XML---
 
+CREATE OR REPLACE PROCEDURE actualizar_detalles_factura(id_factura VARCHAR)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    UPDATE factura
+    SET detalles = XMLPARSE(CONTENT (
+        SELECT
+            '<factura_detalle>' ||
+            '<factura>' ||
+            '<id>' || id || '</id>' ||
+            '<fecha_emision>' || fecha_emision || '</fecha_emision>' ||
+            '<total>' || total || '</total>' ||
+            '<metodo_pago>' || id_metodo_pago || '</metodo_pago>' ||
+            '<cliente>' || id_cliente || '</cliente>' ||
+            '<cantidad>' || cantidad || '</cantidad>' ||
+            '</factura>' ||
+            '</factura_detalle>'
+        FROM factura
+        WHERE id = id_factura
+    ))
+    WHERE id = id_factura;
+END;
+$$;
 
+CREATE OR REPLACE PROCEDURE actualizar_metodo_pago(
+    id_factura VARCHAR,            
+    nuevo_metodo_pago VARCHAR      
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    UPDATE factura
+    SET id_metodo_pago = nuevo_metodo_pago
+    WHERE id = id_factura;
+END;
+$$;
 
+CREATE OR REPLACE PROCEDURE eliminar_total_del_xml(
+    id_factura VARCHAR  
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    UPDATE factura
+    SET detalles = XMLPARSE(CONTENT (
+        SELECT 
+            xmlconcat(
+                (xpath(format('/*/factura[id="%s"]/fecha_emision', id_factura), detalles))[1]::xml,
+                (xpath(format('/*/factura[id="%s"]/metodo_pago', id_factura), detalles))[1]::xml,
+                (xpath(format('/*/factura[id="%s"]/cliente', id_factura), detalles))[1]::xml,
+                (xpath(format('/*/factura[id="%s"]/cantidad', id_factura), detalles))[1]::xml
+            )
+        FROM factura
+        WHERE id = id_factura
+    ))
+    WHERE id = id_factura;
+END;
+$$;
 
+call eliminar_total_del_xml ('FAC-2');
 
-
-
+select * from factura f ;
