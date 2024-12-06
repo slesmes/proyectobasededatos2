@@ -554,9 +554,6 @@ BEGIN
 END;
 $$;
 
-
-
-select 
 select * from buscar_eventos_por_fecha('2024-12-06')
 select * from asiento;
 
@@ -664,6 +661,45 @@ BEGIN
     JOIN evento_detallado ed ON e.id = ed.id_evento
     JOIN artista ar ON ed.id_artista = ar.id
     WHERE ar.id = p_artista_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION proyecto.consultar_tickets(
+    p_ticket_id VARCHAR
+)
+RETURNS TABLE (
+    id VARCHAR,
+    fecha_compra DATE,
+    descuento NUMERIC,
+    precio NUMERIC,
+    precio_descuento NUMERIC,
+    asiento_id VARCHAR,
+    cliente_id VARCHAR,
+    evento_id VARCHAR,
+    asiento_tipo VARCHAR,
+    cliente_nombre VARCHAR,
+    evento_nombre VARCHAR
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        t.id,
+        t.fecha_compra,
+        t.descuento,
+        t.precio,
+        t.precio_descuento,
+        t.id_asiento AS asiento_id,
+        t.id_cliente AS cliente_id,
+        t.id_evento AS evento_id,
+        a.tipo AS asiento_tipo,
+        c.nombre AS cliente_nombre,
+        e.nombre AS evento_nombre
+    FROM ticket t
+    JOIN asiento a ON t.id_asiento = a.id
+    JOIN cliente c ON t.id_cliente = c.id
+    JOIN evento e ON t.id_evento = e.id
+    WHERE t.id = p_ticket_id;
 END;
 $$;
 

@@ -7,12 +7,13 @@ import org.models.Asiento;
 import org.models.Cliente;
 import org.models.Evento;
 import org.models.Lugar;
+import org.models.Ticket;
 
 public class Main {
     public static void main(String[] args) {
-        Evento evento = new Evento();
+        Ticket ticket = new Ticket();
         
-        evento.buscarEventosPorArtista("1");
+        ticket.consultarTicket("1");
 
 
         // Cerrar la conexión al final del programa
