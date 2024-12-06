@@ -504,6 +504,117 @@ END $$;
 
 select * from obtener_precio_asiento('1')
 
+CREATE OR REPLACE FUNCTION proyecto.buscar_eventos_por_fecha(
+    p_fecha DATE
+)
+RETURNS TABLE (
+    id VARCHAR,
+    nombre VARCHAR,
+    fecha DATE,
+    hora TIME,
+    descripcion VARCHAR,
+    genero_musical VARCHAR,
+    estado VARCHAR,
+    cartel VARCHAR,
+    lugar_nombre VARCHAR,
+    precios_vip NUMERIC[],
+    precios_palco NUMERIC[],
+    precios_general NUMERIC[]
+)
+LANGUAGE plpgsql AS $$ 
+BEGIN
+    RETURN QUERY
+    SELECT e.id, 
+           e.nombre, 
+           e.fecha, 
+           e.hora, 
+           e.descripcion, 
+           e.genero_musical, 
+           e.estado, 
+           e.cartel, 
+           l.nombre AS lugar_nombre,
+           -- Precios de asientos VIP
+           ARRAY(SELECT a.precio 
+                 FROM asiento a 
+                 JOIN ocupacion_asientos oa ON a.id = oa.id_asiento
+                 WHERE a.tipo = 'VIP' AND oa.id_evento = e.id) AS precios_vip,
+           -- Precios de asientos Palco
+           ARRAY(SELECT a.precio 
+                 FROM asiento a 
+                 JOIN ocupacion_asientos oa ON a.id = oa.id_asiento
+                 WHERE a.tipo = 'Palco' AND oa.id_evento = e.id) AS precios_palco,
+           -- Precios de asientos Generales
+           ARRAY(SELECT a.precio 
+                 FROM asiento a 
+                 JOIN ocupacion_asientos oa ON a.id = oa.id_asiento
+                 WHERE a.tipo = 'General' AND oa.id_evento = e.id) AS precios_general
+    FROM evento e
+    JOIN lugar l ON e.lugar_id = l.id
+    WHERE e.fecha = p_fecha;
+END;
+$$;
+
+
+select 
+select * from buscar_eventos_por_fecha('2024-12-06')
+select * from asiento;
+
+CREATE OR REPLACE FUNCTION proyecto.buscar_eventos_por_lugar(
+    p_lugar_id VARCHAR
+)
+RETURNS TABLE (
+    id VARCHAR,
+    nombre VARCHAR,
+    fecha DATE,
+    hora TIME,
+    descripcion VARCHAR,
+    genero_musical VARCHAR,
+    estado VARCHAR,
+    cartel VARCHAR,
+    lugar_nombre VARCHAR,
+    precio NUMERIC
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+    RETURN QUERY
+    SELECT e.id, e.nombre, e.fecha, e.hora, e.descripcion, e.genero_musical, e.estado, e.cartel, l.nombre AS lugar_nombre, a.precio
+    FROM evento e
+    JOIN lugar l ON e.lugar_id = l.id
+    JOIN ocupacion_asientos oa ON e.id = oa.id_evento
+    JOIN asiento a ON oa.id_asiento = a.id
+    WHERE e.lugar_id = p_lugar_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION proyecto.buscar_eventos_por_artista(
+    p_artista_id VARCHAR
+)
+RETURNS TABLE (
+    id VARCHAR,
+    nombre VARCHAR,
+    fecha DATE,
+    hora TIME,
+    descripcion VARCHAR,
+    genero_musical VARCHAR,
+    estado VARCHAR,
+    cartel VARCHAR,
+    lugar_nombre VARCHAR,
+    precio NUMERIC
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+    RETURN QUERY
+    SELECT e.id, e.nombre, e.fecha, e.hora, e.descripcion, e.genero_musical, e.estado, e.cartel, l.nombre AS lugar_nombre, a.precio
+    FROM evento e
+    JOIN lugar l ON e.lugar_id = l.id
+    JOIN evento_detallado ed ON e.id = ed.id_evento
+    JOIN artista ar ON ed.id_artista = ar.id
+    JOIN ocupacion_asientos oa ON e.id = oa.id_evento
+    JOIN asiento a ON oa.id_asiento = a.id
+    WHERE ar.id = p_artista_id;
+END;
+$$;
+
 
 ---- funciones con return query-----------------------------------------------
 CREATE TRIGGER crear_factura_trigger
@@ -713,6 +824,8 @@ BEGIN
     RETURN OLD;
 END;
 $$ LANGUAGE plpgsql;
+
+
 
 ------------triggers------------------------------------------------------------
 
@@ -1248,7 +1361,7 @@ select * from asiento where id = '5000'
 
 -- Final CRUD ASIENTOS---------------------------
 
-CREATE OR REPLACE PROCEDURE crear_cliente(
+CREATE OR REPLACE PROCEDURE proyecto.crear_cliente(
     p_id VARCHAR,
     p_nombre VARCHAR,
     p_email VARCHAR,
@@ -1257,7 +1370,7 @@ CREATE OR REPLACE PROCEDURE crear_cliente(
 )
 LANGUAGE plpgsql AS $$
 BEGIN
-    INSERT INTO cliente (id, nombre, email, telefono, direccion)
+    INSERT INTO proyecto.cliente (id, nombre, email, telefono, direccion)
     VALUES (p_id, p_nombre, p_email, p_telefono, p_direccion);
 EXCEPTION
     WHEN unique_violation THEN
@@ -1267,12 +1380,16 @@ EXCEPTION
 END;
 $$;
 
-CREATE OR REPLACE PROCEDURE leer_cliente(
+CREATE OR REPLACE PROCEDURE proyecto.leer_cliente(
     p_id VARCHAR
 )
 LANGUAGE plpgsql AS $$
 BEGIN
+<<<<<<< HEAD
+    RAISE NOTICE 'Cliente: %', (SELECT row_to_json(cliente) FROM proyecto.cliente WHERE id = p_id);
+=======
     RAISE NOTICE 'Cliente: %', (SELECT row_to_json(cliente) FROM cliente WHERE id = p_id);
+>>>>>>> b42c72ae3958e852a0068311d145f27812d532b9
 EXCEPTION
     WHEN no_data_found THEN
         RAISE NOTICE 'No se encontró un cliente con el ID %', p_id;
@@ -1281,12 +1398,12 @@ EXCEPTION
 END;
 $$;
 
-CREATE OR REPLACE PROCEDURE eliminar_cliente(
+CREATE OR REPLACE PROCEDURE proyecto.eliminar_cliente(
     p_id VARCHAR
 )
 LANGUAGE plpgsql AS $$
 BEGIN
-    DELETE FROM cliente WHERE id = p_id;
+    DELETE FROM proyecto.cliente WHERE id = p_id;
 
     IF NOT FOUND THEN
         RAISE NOTICE 'No se encontró ningún cliente con ID %', p_id;
@@ -1296,6 +1413,32 @@ EXCEPTION
         RAISE NOTICE 'Error desconocido al eliminar el cliente: %', SQLERRM;
 END;
 $$;
+
+CREATE OR REPLACE PROCEDURE proyecto.modificar_cliente(
+    p_id VARCHAR,
+    p_nombre VARCHAR,
+    p_email VARCHAR,
+    p_telefono VARCHAR,
+    p_direccion VARCHAR
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+    UPDATE proyecto.cliente
+    SET nombre = p_nombre,
+        email = p_email,
+        telefono = p_telefono,
+        direccion = p_direccion
+    WHERE id = p_id;
+
+    IF NOT FOUND THEN
+        RAISE NOTICE 'No se encontró un cliente con ID % para modificar.', p_id;
+    END IF;
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Error desconocido al modificar el cliente: %', SQLERRM;
+END;
+$$;
+
 
 -- CRUD CLIENTES------------------------------------
 
@@ -1363,4 +1506,8 @@ $$;
 
 call eliminar_total_del_xml ('FAC-2');
 
+<<<<<<< HEAD
 select * from factura f ;
+=======
+select * from factura f ;
+>>>>>>> b42c72ae3958e852a0068311d145f27812d532b9

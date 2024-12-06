@@ -1,5 +1,6 @@
 package org.main;
 
+import java.sql.Date;
 import org.connection.ConexionPostgres;
 import org.models.Artista;
 import org.models.Asiento;
@@ -9,16 +10,9 @@ import org.models.Lugar;
 
 public class Main {
     public static void main(String[] args) {
-        Cliente cliente = new Cliente();
-
-//        // Crear un cliente
-//        cliente.crearCliente("500", "Juan Pérez", "juan@example.com", "123456789", "Calle Falsa 123");
-
-//        // Leer un cliente
-//        cliente.leerCliente("500");
-
-        // Eliminar un cliente
-        cliente.eliminarCliente("500");
+        Evento evento = new Evento();
+        
+        evento.buscarEventosPorArtista("1");
 
 
         // Cerrar la conexión al final del programa
