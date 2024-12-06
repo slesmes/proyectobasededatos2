@@ -4,16 +4,18 @@ import org.connection.ConexionPostgres;
 
 import java.sql.CallableStatement;
 import java.sql.Connection;
+import java.sql.Date;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 
 public class Evento {
 
     // Método para crear un evento
     public void crearEvento(String id, String nombre, String fecha, String hora, String descripcion,
-                            String generoMusical, String estado, String cartel, String lugarId) {
+            String generoMusical, String estado, String cartel, String lugarId) {
         String sql = "call proyecto.crear_evento(?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        try (Connection conn = ConexionPostgres.getConnection();
-             CallableStatement stmt = conn.prepareCall(sql)) {
+        try (Connection conn = ConexionPostgres.getConnection(); CallableStatement stmt = conn.prepareCall(sql)) {
 
             stmt.setString(1, id);
             stmt.setString(2, nombre);
@@ -35,10 +37,9 @@ public class Evento {
 
     // Método para modificar un evento
     public void modificarEvento(String id, String nombre, String fecha, String hora, String descripcion,
-                                 String generoMusical, String estado, String cartel, String lugarId) {
+            String generoMusical, String estado, String cartel, String lugarId) {
         String sql = "call proyecto.modificar_evento(?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        try (Connection conn = ConexionPostgres.getConnection();
-             CallableStatement stmt = conn.prepareCall(sql)) {
+        try (Connection conn = ConexionPostgres.getConnection(); CallableStatement stmt = conn.prepareCall(sql)) {
 
             stmt.setString(1, id);
             stmt.setString(2, nombre);
@@ -60,8 +61,7 @@ public class Evento {
     // Método para eliminar un evento
     public void eliminarEvento(String id) {
         String sql = "call proyecto.eliminar_evento(?)";
-        try (Connection conn = ConexionPostgres.getConnection();
-             CallableStatement stmt = conn.prepareCall(sql)) {
+        try (Connection conn = ConexionPostgres.getConnection(); CallableStatement stmt = conn.prepareCall(sql)) {
 
             stmt.setString(1, id);
             stmt.execute();
@@ -70,5 +70,88 @@ public class Evento {
             System.err.println("Error al eliminar evento: " + e.getMessage());
         }
     }
-}
 
+    public void buscarEventosPorFecha(Date fecha) {
+        String sql = "SELECT * FROM proyecto.buscar_eventos_por_fecha(?)";
+        try (Connection conn = ConexionPostgres.getConnection(); PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setDate(1, fecha);
+            ResultSet rs = stmt.executeQuery();
+
+            while (rs.next()) {
+                System.out.println("Evento ID: " + rs.getString("id"));
+                System.out.println("Nombre: " + rs.getString("nombre"));
+                System.out.println("Fecha: " + rs.getDate("fecha"));
+                System.out.println("Hora: " + rs.getTime("hora"));
+                System.out.println("Descripción: " + rs.getString("descripcion"));
+                System.out.println("Género: " + rs.getString("genero_musical"));
+                System.out.println("Estado: " + rs.getString("estado"));
+                System.out.println("Cartel: " + rs.getString("cartel"));
+                System.out.println("Lugar: " + rs.getString("lugar_nombre"));
+
+                System.out.println("Precio VIP: " + rs.getBigDecimal("precio_vip"));
+                System.out.println("Precio Palco: " + rs.getBigDecimal("precio_palco"));
+                System.out.println("Precio General: " + rs.getBigDecimal("precio_general"));
+
+                System.out.println("--------------------------------------------------------");
+            }
+        } catch (SQLException e) {
+            System.err.println("Error al buscar eventos: " + e.getMessage());
+        }
+    }
+
+    public void buscarEventosPorLugar(String lugarId) {
+        String sql = "SELECT * FROM proyecto.buscar_eventos_por_lugar(?)";
+        try (Connection conn = ConexionPostgres.getConnection(); PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, lugarId);
+            ResultSet rs = stmt.executeQuery();
+
+            while (rs.next()) {
+                System.out.println("Evento ID: " + rs.getString("id"));
+                System.out.println("Nombre: " + rs.getString("nombre"));
+                System.out.println("Fecha: " + rs.getDate("fecha"));
+                System.out.println("Hora: " + rs.getTime("hora"));
+                System.out.println("Descripción: " + rs.getString("descripcion"));
+                System.out.println("Género Musical: " + rs.getString("genero_musical"));
+                System.out.println("Estado: " + rs.getString("estado"));
+                System.out.println("Cartel: " + rs.getString("cartel"));
+                System.out.println("Lugar: " + rs.getString("lugar_nombre"));
+                System.out.println("Precio VIP: " + rs.getBigDecimal("precio_vip"));
+                System.out.println("Precio Palco: " + rs.getBigDecimal("precio_palco"));
+                System.out.println("Precio General: " + rs.getBigDecimal("precio_general"));
+                System.out.println("----------------------------------------------------");
+            }
+        } catch (SQLException e) {
+            System.err.println("Error al buscar eventos por lugar: " + e.getMessage());
+        }
+    }
+
+    public void buscarEventosPorArtista(String artistaId) {
+        String sql = "SELECT * FROM proyecto.buscar_eventos_por_artista(?)";
+        try (Connection conn = ConexionPostgres.getConnection(); PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            stmt.setString(1, artistaId);
+            ResultSet rs = stmt.executeQuery();
+
+            while (rs.next()) {
+                System.out.println("Evento ID: " + rs.getString("id"));
+                System.out.println("Nombre: " + rs.getString("nombre"));
+                System.out.println("Fecha: " + rs.getDate("fecha"));
+                System.out.println("Hora: " + rs.getTime("hora"));
+                System.out.println("Descripción: " + rs.getString("descripcion"));
+                System.out.println("Género Musical: " + rs.getString("genero_musical"));
+                System.out.println("Estado: " + rs.getString("estado"));
+                System.out.println("Cartel: " + rs.getString("cartel"));
+                System.out.println("Lugar: " + rs.getString("lugar_nombre"));
+                System.out.println("Precio VIP: " + rs.getBigDecimal("precio_vip"));
+                System.out.println("Precio Palco: " + rs.getBigDecimal("precio_palco"));
+                System.out.println("Precio General: " + rs.getBigDecimal("precio_general"));
+                System.out.println("----------------------------------------------------");
+            }
+        } catch (SQLException e) {
+            System.err.println("Error al buscar eventos por artista: " + e.getMessage());
+        }
+    }
+
+}
