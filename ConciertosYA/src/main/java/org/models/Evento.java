@@ -2,12 +2,7 @@ package org.models;
 
 import org.connection.ConexionPostgres;
 
-import java.sql.CallableStatement;
-import java.sql.Connection;
-import java.sql.Date;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.sql.*;
 
 public class Evento {
 
@@ -28,7 +23,12 @@ public class Evento {
             stmt.setString(9, lugarId);
 
             stmt.execute();
-            System.out.println("Evento creado con éxito.");
+            SQLWarning warning = stmt.getWarnings();
+            if (warning != null) {
+                System.out.println("Aviso: " + warning.getMessage());
+            } else {
+                System.out.println("Evento creado con éxito.");
+            }
             stmt.close();
         } catch (SQLException e) {
             System.err.println("Error al crear evento: " + e.getMessage());
@@ -52,7 +52,13 @@ public class Evento {
             stmt.setString(9, lugarId);
 
             stmt.execute();
-            System.out.println("Evento modificado con éxito.");
+            SQLWarning warning = stmt.getWarnings();
+            if (warning != null) {
+                System.out.println("Aviso: " + warning.getMessage());
+            } else {
+                System.out.println("Evento modificado con éxito.");
+            }
+
         } catch (SQLException e) {
             System.err.println("Error al modificar evento: " + e.getMessage());
         }
@@ -65,11 +71,17 @@ public class Evento {
 
             stmt.setString(1, id);
             stmt.execute();
-            System.out.println("Evento eliminado con éxito.");
+            SQLWarning warning = stmt.getWarnings();
+            if (warning != null) {
+                System.out.println("Aviso: " + warning.getMessage());
+            } else {
+                System.out.println("Evento eliminado con éxito.");
+            }
         } catch (SQLException e) {
             System.err.println("Error al eliminar evento: " + e.getMessage());
         }
     }
+
 
     public void buscarEventosPorFecha(Date fecha) {
         String sql = "SELECT * FROM proyecto.buscar_eventos_por_fecha(?)";
@@ -94,6 +106,10 @@ public class Evento {
                 System.out.println("Precio General: " + rs.getBigDecimal("precio_general"));
 
                 System.out.println("--------------------------------------------------------");
+            }
+            SQLWarning warning = stmt.getWarnings();
+            if (warning != null) {
+                System.out.println("Aviso: " + warning.getMessage());
             }
         } catch (SQLException e) {
             System.err.println("Error al buscar eventos: " + e.getMessage());
@@ -122,6 +138,10 @@ public class Evento {
                 System.out.println("Precio General: " + rs.getBigDecimal("precio_general"));
                 System.out.println("----------------------------------------------------");
             }
+            SQLWarning warning = stmt.getWarnings();
+            if (warning != null) {
+                System.out.println("Aviso: " + warning.getMessage());
+            }
         } catch (SQLException e) {
             System.err.println("Error al buscar eventos por lugar: " + e.getMessage());
         }
@@ -148,6 +168,11 @@ public class Evento {
                 System.out.println("Precio Palco: " + rs.getBigDecimal("precio_palco"));
                 System.out.println("Precio General: " + rs.getBigDecimal("precio_general"));
                 System.out.println("----------------------------------------------------");
+            }
+
+            SQLWarning warning = stmt.getWarnings();
+            if (warning != null) {
+                System.out.println("Aviso: " + warning.getMessage());
             }
         } catch (SQLException e) {
             System.err.println("Error al buscar eventos por artista: " + e.getMessage());
