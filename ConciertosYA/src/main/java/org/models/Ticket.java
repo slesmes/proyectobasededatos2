@@ -4,7 +4,6 @@ import org.connection.ConexionPostgres;
 
 import java.sql.CallableStatement;
 import java.sql.Connection;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 
@@ -12,11 +11,15 @@ public class Ticket {
 
     public void consultarTicket(String ticketId) {
         String sql = "SELECT * FROM proyecto.consultar_tickets(?)";
-        try (Connection conn = ConexionPostgres.getConnection(); PreparedStatement stmt = conn.prepareStatement(sql)) {
+        try (Connection conn = ConexionPostgres.getConnection(); 
+             CallableStatement stmt = conn.prepareCall(sql)) {
 
-            stmt.setString(1, ticketId);
+            stmt.setString(1, ticketId);  // Establecer el parámetro de entrada
+
+            // Ejecutar la consulta
             ResultSet rs = stmt.executeQuery();
 
+            // Verificar si se encontró algún resultado
             if (rs.next()) {
                 System.out.println("Ticket ID: " + rs.getString("id"));
                 System.out.println("Fecha de Compra: " + rs.getDate("fecha_compra"));
@@ -32,9 +35,9 @@ public class Ticket {
             } else {
                 System.out.println("No se encontró un ticket con el ID: " + ticketId);
             }
+
         } catch (SQLException e) {
             System.err.println("Error al consultar el ticket: " + e.getMessage());
         }
     }
-
 }
