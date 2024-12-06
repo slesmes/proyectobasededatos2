@@ -47,22 +47,22 @@ create sequence id_ticket
 
 --CREACION DE TABLAS
 
-create table artista(
+create table proyecto.artista(
 	id varchar primary key,
 	nombre varchar,
 	genero_musical varchar check(genero_musical in ('salsa','rock','pop','reguetton'))	
 );
 
-create table redsocial(
+create table proyecto.redsocial(
 	id varchar primary key,
 	nombre varchar check(nombre in ('instagram','facebook','twitter')),
 	usuario varchar,
 	artista_id varchar,
 	
-	foreign key (artista_id) references artista(id)
+	foreign key (artista_id) references proyecto.artista(id)
 );
 
-create table lugar(
+create table proyecto.lugar(
 	id varchar primary key,
 	nombre varchar,
 	direccion varchar,
@@ -71,7 +71,7 @@ create table lugar(
 	imagen varchar
 );
 
-create table evento(
+create table proyecto.evento(
 	id varchar primary key,
 	nombre varchar,
 	fecha date,
@@ -82,19 +82,19 @@ create table evento(
 	cartel varchar,
 	lugar_id varchar,
 	
-	foreign key (lugar_id) references lugar(id)
+	foreign key (lugar_id) references proyecto.lugar(id)
 );
 
-create table evento_detallado(
+create table proyecto.evento_detallado(
 	id varchar primary key,
 	id_evento varchar,
 	id_artista varchar,
 	
-	foreign key (id_evento) references evento(id),
-	foreign key (id_artista) references artista(id)
+	foreign key (id_evento) references proyecto.evento(id),
+	foreign key (id_artista) references proyecto.artista(id)
 );
 
-create table cliente(
+create table proyecto.cliente(
 	id varchar primary key,
 	nombre varchar,
 	email varchar,
@@ -102,7 +102,7 @@ create table cliente(
 	direccion varchar
 );
 
-create table asiento(
+create table proyecto.asiento(
 	id varchar primary key,
 	codigo varchar,
 	fila varchar,
@@ -113,10 +113,10 @@ create table asiento(
 	estado varchar check (estado in ('disponible', 'reservado', 'vendido')),
 	id_lugar varchar,
 	
-	foreign key (id_lugar) references lugar(id)
+	foreign key (id_lugar) references proyecto.lugar(id)
 );
 
-create table inventario(
+create table proyecto.inventario(
 	id varchar primary key,
 	cantidad_disponible numeric,
 	cantidad_vendidos numeric,
@@ -124,11 +124,11 @@ create table inventario(
 	id_lugar varchar,
 	id_evento varchar,
 	
-	foreign key(id_lugar) references lugar(id),
-	foreign key(id_evento) references evento(id)
+	foreign key(id_lugar) references proyecto.lugar(id),
+	foreign key(id_evento) references proyecto.evento(id)
 );
 
-create table ticket(
+create table proyecto.ticket(
 	id varchar primary key,
 	fecha_compra date,
 	descuento numeric,
@@ -138,18 +138,18 @@ create table ticket(
 	id_cliente varchar,
 	id_evento varchar,
 	
-	foreign key(id_asiento) references asiento(id),
-	foreign key(id_cliente) references cliente(id),
-	foreign key(id_evento) references evento(id)
+	foreign key(id_asiento) references proyecto.asiento(id),
+	foreign key(id_cliente) references proyecto.cliente(id),
+	foreign key(id_evento) references proyecto.evento(id)
 );
 
-create table metodo_pago(
+create table proyecto.metodo_pago(
 	id varchar primary key,
 	tipo_pago varchar check (tipo_pago in ('efectivo', 'efectivo y tarjeta de credito', 'efectivo y tarjeta de credito conciertosya', 'tarjeta de credito y tarjeta conciertosya'))
 );
 
 
-CREATE TABLE factura (
+CREATE TABLE proyecto.factura (
     id VARCHAR PRIMARY KEY,
     fecha_emision DATE,
     total NUMERIC,
@@ -157,30 +157,30 @@ CREATE TABLE factura (
     id_cliente VARCHAR,
     cantidad NUMERIC,
     detalles XML, -- Campo para almacenar datos en formato XML
-    FOREIGN KEY (id_metodo_pago) REFERENCES metodo_pago(id),
-    FOREIGN KEY (id_cliente) REFERENCES cliente(id)
+    FOREIGN KEY (id_metodo_pago) REFERENCES proyecto.metodo_pago(id),
+    FOREIGN KEY (id_cliente) REFERENCES proyecto.cliente(id)
 );
 
-create table detalle_factura(
+create table proyecto.detalle_factura(
 
 	id varchar primary key,
 	id_ticket varchar,
 	id_factura varchar,
 	
-	foreign key(id_ticket) references ticket(id),
-	foreign key(id_factura) references factura(id)
+	foreign key(id_ticket) references proyecto.ticket(id),
+	foreign key(id_factura) references proyecto.factura(id)
 );
 
-CREATE TABLE ocupacion_asientos (
+CREATE TABLE proyecto.ocupacion_asientos (
     id_asiento VARCHAR,
     id_evento VARCHAR,
     estado VARCHAR CHECK (estado IN ('disponible', 'reservado', 'vendido')),
     PRIMARY KEY (id_asiento, id_evento),
-    FOREIGN KEY (id_asiento) REFERENCES asiento(id),
-    FOREIGN KEY (id_evento) REFERENCES evento(id)
+    FOREIGN KEY (id_asiento) REFERENCES proyecto.asiento(id),
+    FOREIGN KEY (id_evento) REFERENCES proyecto.evento(id)
 );
 
-create table auditorias(
+create table proyecto.auditorias(
     id varchar primary key,
     nombre_cliente varchar,
     codigo_asiento varchar,
@@ -711,10 +711,10 @@ BEGIN
         a.tipo AS asiento_tipo,
         c.nombre AS cliente_nombre,
         e.nombre AS evento_nombre
-    FROM ticket t
-    JOIN asiento a ON t.id_asiento = a.id
-    JOIN cliente c ON t.id_cliente = c.id
-    JOIN evento e ON t.id_evento = e.id
+    FROM proyecto.ticket t
+    JOIN proyecto.asiento a ON t.id_asiento = a.id
+    JOIN proyecto.cliente c ON t.id_cliente = c.id
+    JOIN proyecto.evento e ON t.id_evento = e.id
     WHERE t.id = p_ticket_id;
 END;
 $$;
@@ -1098,6 +1098,20 @@ EXCEPTION
         RAISE NOTICE 'Error: El género musical % no es válido.', p_genero_musical;
     WHEN OTHERS THEN
         RAISE NOTICE 'Error desconocido: %', SQLERRM;
+END;
+$$;
+
+CREATE OR REPLACE PROCEDURE proyecto.leer_artista(
+    p_id VARCHAR
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+    RAISE NOTICE 'Artista: %', (SELECT row_to_json(artista) FROM proyecto.artista WHERE id = p_id);
+EXCEPTION
+    WHEN no_data_found THEN
+        RAISE NOTICE 'No se encontró un artista con el ID %', p_id;
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Error al consultar el artista: %', SQLERRM;
 END;
 $$;
 
@@ -1556,7 +1570,7 @@ BEGIN
     WHERE id = id_factura;
 END;
 $$;
-
+select * from proyecto.ticket t ;
 CREATE OR REPLACE PROCEDURE eliminar_total_del_xml(
     id_factura VARCHAR  
 )

@@ -14,7 +14,7 @@ public class ConexionPostgres {
             this.connection = DriverManager.getConnection(
                 "jdbc:postgresql://localhost:5432/postgres?currentSchema=proyecto",
                 "postgres",
-                "Soyfeliz13"
+                "Jeb11072004"
             );
             connection.setAutoCommit(true);
             System.out.println("Conexión Postgres exitosa");

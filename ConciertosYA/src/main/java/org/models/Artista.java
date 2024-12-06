@@ -6,6 +6,7 @@ import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.sql.SQLWarning;
 
 public class Artista {
 
@@ -24,6 +25,32 @@ public class Artista {
             System.err.println("Error al crear artista: " + e.getMessage());
         }
     }
+    
+    public void leerArtista(String id) {
+    String sql = "call proyecto.leer_artista(?)";  // Llamada al procedimiento
+    try (Connection conn = ConexionPostgres.getConnection();
+         CallableStatement stmt = conn.prepareCall(sql)) {
+
+        stmt.setString(1, id);  // Establecemos el parámetro de entrada
+
+        // Ejecutar el procedimiento
+        stmt.execute();
+
+        // Capturando las advertencias del procedimiento (RAISE NOTICE)
+        SQLWarning warning = stmt.getWarnings();
+        if (warning != null) {
+            // Si hay un mensaje de advertencia, lo imprimimos
+            System.out.println("Aviso: " + warning.getMessage());
+        } else {
+            // Si no hay advertencias, significa que no se encontró el artista o se ejecutó correctamente
+            System.out.println("No se encontró un artista con el ID " + id);
+        }
+
+    } catch (SQLException e) {
+        System.err.println("Error al leer artista: " + e.getMessage());
+    }
+}
+
 
     // Método para modificar un artista
     public void modificarArtista(String id, String nombre, String generoMusical) {
