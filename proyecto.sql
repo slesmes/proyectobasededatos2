@@ -42,6 +42,10 @@ create sequence id_ticket
 	start with 1
 	increment by 1;
 
+create sequence id_auditoria
+	start with 1
+	increment by 1;
+
 --FIN DE LAS SECUENCIAS
 
 
@@ -182,6 +186,7 @@ CREATE TABLE proyecto.ocupacion_asientos (
 
 create table proyecto.auditorias(
     id varchar primary key,
+    id_factura varchar,
     nombre_cliente varchar,
     codigo_asiento varchar,
     tipo_asiento varchar check (tipo_asiento in ('general', 'vip', 'palco')),
@@ -776,40 +781,40 @@ DECLARE
     descuento NUMERIC;
 BEGIN
     FOR i IN 1..capacidad_lugar LOOP
-        -- Determinar tipo de asiento y sus propiedades según posición
+        
         IF i <= capacidad_lugar * 0.1 THEN
-            tipo_asiento := 'palco';  -- Primeros 10% de los asientos son 'palco'
+            tipo_asiento := 'palco';  
             precio := 50000;
             descuento := 0.1;
         ELSIF i <= capacidad_lugar * 0.3 THEN
-            tipo_asiento := 'vip';  -- Siguientes 20% son 'vip'
+            tipo_asiento := 'vip';  
             precio := 30000;
             descuento := 0.05;
         ELSE
-            tipo_asiento := 'general';  -- El resto de los asientos son 'general'
+            tipo_asiento := 'general';  
             precio := 20000;
             descuento := 0.0;
         END IF;
 
-        -- Insertar asiento con estado "disponible"
+     
         INSERT INTO proyecto.asiento (id, codigo, fila, columna, precio, descuento, tipo, estado, id_lugar)
         VALUES (
-            nextval('id_asiento'),            -- ID generado por secuencia
-            'AS-' || NEW.id || '-' || i,     -- Código único
-            fila,                            -- Fila
-            columna,                         -- Columna
-            precio,                          -- Precio
-            descuento,                       -- Descuento
-            tipo_asiento,                    -- Tipo de asiento
-            'disponible',                    -- Estado inicial fijo
-            NEW.id                           -- ID del lugar
+            nextval('id_asiento'),            
+            'AS-' || NEW.id || '-' || i,     
+            fila,                            
+            columna,                        
+            precio,                          
+            descuento,                       
+            tipo_asiento,                    
+            'disponible',                    
+            NEW.id                           
         );
 
-        -- Actualizar fila y columna
+       
         columna := columna + 1;
         IF columna > 10 THEN
             columna := 1;
-            fila := CHR(ASCII(fila) + 1); -- Avanzar a la siguiente fila
+            fila := CHR(ASCII(fila) + 1); 
         END IF;
     END LOOP;
 
@@ -964,9 +969,9 @@ EXECUTE FUNCTION proyecto.registrar_auditoria();
 CREATE OR REPLACE FUNCTION proyecto.registrar_auditoria()
 RETURNS TRIGGER AS $$
 BEGIN
-
     INSERT INTO proyecto.auditorias (
         id,
+        id_factura,
         nombre_cliente,
         codigo_asiento,
         tipo_asiento,
@@ -974,7 +979,8 @@ BEGIN
         detalles
     )
     SELECT
-        NEW.id AS id,
+        nextval('id_auditoria') AS id, 
+        NEW.id AS id_factura,          
         c.nombre AS nombre_cliente,
         t.id_asiento AS codigo_asiento,
         a.tipo AS tipo_asiento,
@@ -984,13 +990,13 @@ BEGIN
             'codigo_asiento', t.id_asiento,
             'tipo_asiento', a.tipo,
             'precio_descuento', t.precio_descuento
-        ))
+        )) AS detalles
     FROM proyecto.detalle_factura df
     INNER JOIN proyecto.ticket t ON df.id_ticket = t.id
     INNER JOIN proyecto.cliente c ON t.id_cliente = c.id
     INNER JOIN proyecto.asiento a ON t.id_asiento = a.id
     WHERE df.id_factura = NEW.id
-    GROUP BY NEW.id, c.nombre, t.id_asiento, a.tipo, t.precio_descuento;
+    GROUP BY c.nombre, t.id_asiento, a.tipo, t.precio_descuento, NEW.id;
 
     RAISE NOTICE 'Auditoría registrada para la factura %.', NEW.id;
 
@@ -1159,6 +1165,28 @@ EXCEPTION
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION proyecto.crear_factura(id_cliente_param VARCHAR)
+RETURNS VARCHAR AS $$
+DECLARE
+    id_factura_generado VARCHAR;
+BEGIN
+
+    id_factura_generado := 'FAC-' || NEXTVAL('id_factura');
+
+    INSERT INTO proyecto.factura (id, fecha_emision, total, id_metodo_pago, id_cliente, cantidad)
+    VALUES (
+        id_factura_generado,
+        CURRENT_DATE,
+        0,
+        NULL,
+        id_cliente_param,
+        0
+    );
+
+    RETURN id_factura_generado;
+END;
+$$ LANGUAGE plpgsql;
+
 CREATE OR REPLACE PROCEDURE proyecto.leer_artista(
     p_id VARCHAR
 )
@@ -1173,7 +1201,7 @@ EXCEPTION
 END;
 $$;
 
-
+select * from proyecto.crear_factura('2');
 CREATE OR REPLACE PROCEDURE proyecto.modificar_artista(
     p_id VARCHAR,
     p_nombre VARCHAR,
@@ -1304,6 +1332,17 @@ $$;
 
 
 -- CRUD EVENTO 
+
+CREATE OR REPLACE FUNCTION proyecto.leer_evento()
+RETURNS TABLE(id VARCHAR, nombre VARCHAR, genero_musical VARCHAR) AS $$
+BEGIN
+    
+    RETURN QUERY
+    SELECT e.id, e.nombre, e.genero_musical
+    FROM proyecto.evento e
+    WHERE e.estado = 'programado';
+END;
+$$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE PROCEDURE proyecto.crear_evento(
     p_nombre VARCHAR,
@@ -1455,6 +1494,47 @@ $$;
 --FINAL CRUD LUGAR------------------------------
 
 -- CRUD ASIENTO --------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION proyecto.obtener_asientos_disponibles_por_evento(
+    p_evento_id VARCHAR
+)
+RETURNS TABLE(id VARCHAR, codigo VARCHAR, fila VARCHAR, columna VARCHAR, precio NUMERIC, descuento NUMERIC, tipo VARCHAR, estado VARCHAR) AS $$
+BEGIN
+    RETURN QUERY
+    WITH asientos_disponibles AS (
+        SELECT a.id AS asiento_id, a.codigo AS asiento_codigo, a.fila AS asiento_fila, a.columna AS asiento_columna, 
+               a.precio AS asiento_precio, a.descuento AS asiento_descuento, a.tipo AS asiento_tipo, a.estado AS asiento_estado
+        FROM proyecto.asiento a
+        JOIN proyecto.lugar l ON a.id_lugar = l.id
+        JOIN proyecto.evento e ON l.id = e.lugar_id
+        WHERE e.id = p_evento_id
+        AND a.estado = 'disponible'
+    )
+    SELECT asiento_id AS id, asiento_codigo AS codigo, asiento_fila AS fila, asiento_columna AS columna, 
+           asiento_precio AS precio, asiento_descuento AS descuento, asiento_tipo AS tipo, asiento_estado AS estado
+    FROM (
+        SELECT asiento_id, asiento_codigo, asiento_fila, asiento_columna, asiento_precio, asiento_descuento, asiento_tipo, asiento_estado,
+               ROW_NUMBER() OVER (PARTITION BY asiento_tipo ORDER BY asiento_fila, asiento_columna) AS row_num
+        FROM asientos_disponibles
+    ) AS asientos_con_fila_columna
+    WHERE row_num <= 10; 
+
+EXCEPTION
+    
+    WHEN no_data_found THEN
+        RAISE NOTICE 'No se encontraron asientos disponibles para el evento con ID %', p_evento_id;
+        RETURN QUERY SELECT NULL::VARCHAR, NULL::VARCHAR, NULL::VARCHAR, NULL::VARCHAR, NULL::NUMERIC, NULL::NUMERIC, NULL::VARCHAR, NULL::VARCHAR;
+    
+    
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Se produjo un error inesperado: %', SQLERRM;
+        RETURN QUERY SELECT NULL::VARCHAR, NULL::VARCHAR, NULL::VARCHAR, NULL::VARCHAR, NULL::NUMERIC, NULL::NUMERIC, NULL::VARCHAR, NULL::VARCHAR;
+END;
+$$ LANGUAGE plpgsql;
+
+select * from proyecto.detalle_factura df ;
+select * from proyecto.factura f ;
+select * from proyecto.auditorias a;
 
 CREATE OR REPLACE PROCEDURE proyecto.crear_asiento(
     p_id VARCHAR,
