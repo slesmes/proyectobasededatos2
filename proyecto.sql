@@ -42,10 +42,6 @@ create sequence id_ticket
 	start with 1
 	increment by 1;
 
-create sequence id_detalle_factura
-	start with 1
-	increment by 1;
-
 
 --------------------fin secuencias---------------------------
 
@@ -150,6 +146,7 @@ create table metodo_pago(
 	tipo_pago varchar check (tipo_pago in ('efectivo', 'efectivo y tarjeta de credito', 'efectivo y tarjeta de credito conciertosya', 'tarjeta de credito y tarjeta conciertosya'))
 );
 
+
 CREATE TABLE factura (
     id VARCHAR PRIMARY KEY,
     fecha_emision DATE,
@@ -161,7 +158,6 @@ CREATE TABLE factura (
     FOREIGN KEY (id_metodo_pago) REFERENCES metodo_pago(id),
     FOREIGN KEY (id_cliente) REFERENCES cliente(id)
 );
-
 
 create table detalle_factura(
 
@@ -184,6 +180,7 @@ CREATE TABLE ocupacion_asientos (
 
 ----- fin creacion de tablas ---------------------------------------
 
+
 CREATE OR REPLACE PROCEDURE insertar_metodos_pago()
 LANGUAGE plpgsql AS $$
 BEGIN
@@ -198,7 +195,6 @@ BEGIN
 END $$;
 
 call insertar_metodos_pago() 
-
 
 create or replace PROCEDURE insertar_artistas()
 language plpgsql as $$
@@ -510,10 +506,10 @@ select * from obtener_precio_asiento('1')
 
 
 ---- funciones con return query-----------------------------------------------
---CREATE TRIGGER crear_factura_trigger
---AFTER INSERT ON ticket
---FOR EACH ROW
---EXECUTE FUNCTION crear_factura();
+CREATE TRIGGER crear_factura_trigger
+AFTER INSERT ON ticket
+FOR EACH ROW
+EXECUTE FUNCTION crear_factura();
 
 CREATE TRIGGER trigger_eliminar_eventos_detallados_a
 BEFORE DELETE ON artista
@@ -546,59 +542,33 @@ FOR EACH ROW
 EXECUTE FUNCTION cancelar_eventos_por_lugar();
 
 
-
-CREATE OR REPLACE PROCEDURE actualizar_factura(id_factura_param VARCHAR)
-AS $$
+CREATE OR REPLACE FUNCTION crear_factura()
+RETURNS TRIGGER
+LANGUAGE plpgsql AS $$
 DECLARE
-    total_factura NUMERIC;
-    cantidad_tickets INTEGER;
+    nombre_cliente TEXT;
 BEGIN
 
-    SELECT COALESCE(SUM(t.precio_descuento), 0)
-    INTO total_factura
-    FROM ticket t
-    INNER JOIN detalle_factura df ON t.id = df.id_ticket
-    WHERE df.id_factura = id_factura_param;
-
-    SELECT COUNT(*)
-    INTO cantidad_tickets
-    FROM detalle_factura
-    WHERE id_factura = id_factura_param;
-
-    UPDATE factura
-    SET total = total_factura,
-        cantidad = cantidad_tickets
-    WHERE id = id_factura_param;
-END;
-$$ LANGUAGE plpgsql;
+    SELECT nombre INTO nombre_cliente
+    FROM cliente
+    WHERE id = NEW.id_cliente;
 
 
-
-
-
-CREATE OR REPLACE FUNCTION crear_factura(id_cliente_param VARCHAR)
-RETURNS VARCHAR AS $$
-DECLARE
-    id_factura_generado VARCHAR;
-BEGIN
-
-    id_factura_generado := 'FAC-' || NEXTVAL('id_factura');
-    
-    INSERT INTO factura (id, fecha_emision, total, id_metodo_pago, id_cliente, cantidad)
+    INSERT INTO factura (id, detalle)
     VALUES (
-        id_factura_generado,
-        CURRENT_DATE,
-        0,
-        NULL,
-        id_cliente_param,
-        0
+        nextval('id_factura'), 
+        XMLPARSE(
+            DOCUMENT '<detalle>' ||
+                '<cliente>' || nombre_cliente || '</cliente>' ||
+                '<fecha_emision>' || CURRENT_DATE || '</fecha_emision>' ||
+                '<total>0</total>' ||
+                '<metodo_pago>efectivo</metodo_pago>' ||
+            '</detalle>'
+        )
     );
-    
-    RETURN id_factura_generado;
-END;
-$$ LANGUAGE plpgsql;
 
-
+    RETURN NEW;
+END $$;
 
 CREATE OR REPLACE FUNCTION eliminar_eventos_detallados_a()
 RETURNS TRIGGER AS $$
@@ -867,30 +837,41 @@ select * from ticket;
 delete from ticket where id = '1'; 
 select * from inventario i where id = '1';
 select * from factura;
-select * from asiento a 
-select * from metodo_pago mp 
 
 -------------------funciones del ticket----------------------
 
 CREATE OR REPLACE PROCEDURE actualizar_metodo_pago_factura(
-    p_id_factura VARCHAR,
+    p_id_cliente VARCHAR,
+    p_fecha DATE,
     p_metodo_pago VARCHAR
 )
 LANGUAGE plpgsql AS $$
 DECLARE
-    v_metodo_pago VARCHAR;
+    factura_id VARCHAR;
+	v_metodo_pago varchar;
 BEGIN
-    SELECT * INTO v_metodo_pago FROM obtener_tipo_pago(p_metodo_pago);
 
-    IF EXISTS (SELECT 1 FROM factura WHERE id = p_id_factura) THEN
+    SELECT id INTO factura_id
+    FROM factura
+    WHERE detalle::text LIKE '%' || p_id_cliente || '%'
+      AND detalle::text LIKE '%' || p_fecha || '%'
+    ORDER BY id DESC
+    LIMIT 1;
+
+    IF factura_id IS NOT NULL THEN
+		select * into v_metodo_pago from obtener_tipo_pago(p_metodo_pago);
         UPDATE factura
-        SET id_metodo_pago = p_metodo_pago
-        WHERE id = p_id_factura;
+        SET detalle = XMLPARSE(
+            DOCUMENT REPLACE(
+                detalle::text,
+                '<metodo_pago>efectivo</metodo_pago>',
+                '<metodo_pago>' || v_metodo_pago || '</metodo_pago>'
+            )
+        )
+        WHERE id = factura_id;
     ELSE
-        RAISE EXCEPTION 'No se encontró la factura con el ID: %', p_id_factura;
+        RAISE NOTICE 'No se encontró una factura para el cliente % en la fecha %', p_id_cliente, p_fecha;
     END IF;
-    
-    RAISE NOTICE 'Factura % actualizada con el nuevo método de pago: %', p_id_factura, v_metodo_pago;
 END $$;
 
 ---------------------funciones de la factura------------------------------------------------
@@ -923,7 +904,7 @@ CREATE OR REPLACE PROCEDURE proyecto.crear_artista(
 )
 LANGUAGE plpgsql AS $$
 BEGIN
-    INSERT INTO artista (id, nombre, genero_musical)
+    INSERT INTO proyecto.artista (id, nombre, genero_musical)
     VALUES (p_id, p_nombre, p_genero_musical);
 EXCEPTION
     WHEN unique_violation THEN
@@ -935,9 +916,6 @@ EXCEPTION
 END;
 $$;
 
-select * from artista
-SELECT txid_current(), state FROM pg_stat_activity WHERE state = 'active';
-
 
 CREATE OR REPLACE PROCEDURE proyecto.modificar_artista(
     p_id VARCHAR,
@@ -946,7 +924,7 @@ CREATE OR REPLACE PROCEDURE proyecto.modificar_artista(
 )
 LANGUAGE plpgsql AS $$
 BEGIN
-    UPDATE artista
+    UPDATE proyecto.artista
     SET nombre = p_nombre, genero_musical = p_genero_musical
     WHERE id = p_id;
 
@@ -968,7 +946,7 @@ CREATE OR REPLACE PROCEDURE proyecto.eliminar_artista(
 LANGUAGE plpgsql AS $$
 BEGIN
 
-    DELETE FROM artista WHERE id = p_id;
+    DELETE FROM proyecto.artista WHERE id = p_id;
 
     IF NOT FOUND THEN
         RAISE NOTICE 'No se encontró ningún artista con ID %', p_id;
@@ -1046,7 +1024,7 @@ $$;
 
 -- CRUD EVENTO 
 
-CREATE OR REPLACE PROCEDURE crear_evento(
+CREATE OR REPLACE PROCEDURE proyecto.crear_evento(
     p_id VARCHAR,
     p_nombre VARCHAR,
     p_fecha DATE,
@@ -1059,19 +1037,17 @@ CREATE OR REPLACE PROCEDURE crear_evento(
 )
 LANGUAGE plpgsql AS $$
 BEGIN
-    INSERT INTO evento (id, nombre, fecha, hora, descripcion, genero_musical, estado, cartel, lugar_id)
+    INSERT INTO proyecto.evento (id, nombre, fecha, hora, descripcion, genero_musical, estado, cartel, lugar_id)
     VALUES (p_id, p_nombre, p_fecha, p_hora, p_descripcion, p_genero_musical, p_estado, p_cartel, p_lugar_id);
 EXCEPTION
     WHEN unique_violation THEN
         RAISE NOTICE 'Error: Ya existe un evento con el ID %', p_id;
-    WHEN check_violation THEN
-        RAISE NOTICE 'Error: El valor % no es válido para el campo %', p_genero_musical, 'genero_musical';
     WHEN OTHERS THEN
         RAISE NOTICE 'Error desconocido al crear el evento: %', SQLERRM;
 END;
 $$;
 
-CREATE OR REPLACE PROCEDURE modificar_evento(
+CREATE OR REPLACE PROCEDURE proyecto.modificar_evento(
     p_id VARCHAR,
     p_nombre VARCHAR,
     p_fecha DATE,
@@ -1084,7 +1060,7 @@ CREATE OR REPLACE PROCEDURE modificar_evento(
 )
 LANGUAGE plpgsql AS $$
 BEGIN
-    UPDATE evento
+    UPDATE proyecto.evento
     SET nombre = p_nombre, fecha = p_fecha, hora = p_hora, descripcion = p_descripcion, 
         genero_musical = p_genero_musical, estado = p_estado, cartel = p_cartel, lugar_id = p_lugar_id
     WHERE id = p_id;
@@ -1100,12 +1076,12 @@ EXCEPTION
 END;
 $$;
 
-CREATE OR REPLACE PROCEDURE eliminar_evento(
+CREATE OR REPLACE PROCEDURE proyecto.eliminar_evento(
     p_id VARCHAR
 )
 LANGUAGE plpgsql AS $$
 BEGIN
-    DELETE FROM evento WHERE id = p_id;
+    DELETE FROM proyecto.evento WHERE id = p_id;
 
     IF NOT FOUND THEN
         RAISE NOTICE 'No se encontró ningún evento con ID % para eliminar.', p_id;
@@ -1121,7 +1097,7 @@ $$;
 
 -- CRUD LUGAR
 
-CREATE OR REPLACE PROCEDURE crear_lugar(
+CREATE OR REPLACE PROCEDURE proyecto.crear_lugar(
     p_id VARCHAR,
     p_nombre VARCHAR,
     p_direccion VARCHAR,
@@ -1131,7 +1107,7 @@ CREATE OR REPLACE PROCEDURE crear_lugar(
 )
 LANGUAGE plpgsql AS $$
 BEGIN
-    INSERT INTO lugar (id, nombre, direccion, capacidad, ciudad, imagen)
+    INSERT INTO proyecto.lugar (id, nombre, direccion, capacidad, ciudad, imagen)
     VALUES (p_id, p_nombre, p_direccion, p_capacidad, p_ciudad, p_imagen);
 EXCEPTION
     WHEN unique_violation THEN
@@ -1141,7 +1117,7 @@ EXCEPTION
 END;
 $$;
 
-CREATE OR REPLACE PROCEDURE modificar_lugar(
+CREATE OR REPLACE PROCEDURE proyecto.modificar_lugar(
     p_id VARCHAR,
     p_nombre VARCHAR,
     p_direccion VARCHAR,
@@ -1151,7 +1127,7 @@ CREATE OR REPLACE PROCEDURE modificar_lugar(
 )
 LANGUAGE plpgsql AS $$
 BEGIN
-    UPDATE lugar
+    UPDATE proyecto.lugar
     SET nombre = p_nombre, direccion = p_direccion, capacidad = p_capacidad, ciudad = p_ciudad, imagen = p_imagen
     WHERE id = p_id;
 
@@ -1164,12 +1140,12 @@ EXCEPTION
 END;
 $$;
 
-CREATE OR REPLACE PROCEDURE eliminar_lugar(
+CREATE OR REPLACE PROCEDURE proyecto.eliminar_lugar(
     p_id VARCHAR
 )
 LANGUAGE plpgsql AS $$
 BEGIN
-    DELETE FROM lugar WHERE id = p_id;
+    DELETE FROM proyecto.lugar WHERE id = p_id;
 
     IF NOT FOUND THEN
         RAISE NOTICE 'No se encontró ningún lugar con ID % para eliminar.', p_id;
@@ -1182,9 +1158,10 @@ EXCEPTION
 END;
 $$;
 
+
 --FINAL CRUD LUGAR------------------------------
 
-CREATE OR REPLACE PROCEDURE crear_asiento(
+CREATE OR REPLACE PROCEDURE proyecto.crear_asiento(
     p_id VARCHAR,
     p_codigo VARCHAR,
     p_fila VARCHAR,
@@ -1197,7 +1174,7 @@ CREATE OR REPLACE PROCEDURE crear_asiento(
 )
 LANGUAGE plpgsql AS $$
 BEGIN
-    INSERT INTO asiento (id, codigo, fila, columna, precio, descuento, tipo, estado, id_lugar)
+    INSERT INTO proyecto.asiento (id, codigo, fila, columna, precio, descuento, tipo, estado, id_lugar)
     VALUES (p_id, p_codigo, p_fila, p_columna, p_precio, p_descuento, p_tipo, p_estado, p_id_lugar);
 EXCEPTION
     WHEN unique_violation THEN
@@ -1211,7 +1188,7 @@ EXCEPTION
 END;
 $$;
 
-CREATE OR REPLACE PROCEDURE modificar_asiento(
+CREATE OR REPLACE PROCEDURE proyecto.modificar_asiento(
     p_id VARCHAR,
     p_codigo VARCHAR,
     p_fila VARCHAR,
@@ -1224,7 +1201,7 @@ CREATE OR REPLACE PROCEDURE modificar_asiento(
 )
 LANGUAGE plpgsql AS $$
 BEGIN
-    UPDATE asiento
+    UPDATE proyeto.asiento
     SET codigo = p_codigo,
         fila = p_fila,
         columna = p_columna,
@@ -1248,12 +1225,12 @@ EXCEPTION
 END;
 $$;
 
-CREATE OR REPLACE PROCEDURE eliminar_asiento(
+CREATE OR REPLACE PROCEDURE proyecto.eliminar_asiento(
     p_id VARCHAR
 )
 LANGUAGE plpgsql AS $$
 BEGIN
-    DELETE FROM asiento WHERE id = p_id;
+    DELETE FROM proyecto.asiento WHERE id = p_id;
 
     IF NOT FOUND THEN
         RAISE NOTICE 'No se encontró ningún asiento con ID %', p_id;
@@ -1266,6 +1243,8 @@ EXCEPTION
 END;
 $$;
 
+select * from asiento;
+select * from asiento where id = '5000'
 
 -- Final CRUD ASIENTOS---------------------------
 

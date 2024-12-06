@@ -3,21 +3,23 @@ package org.main;
 import org.connection.ConexionPostgres;
 import org.models.Artista;
 import org.models.Asiento;
+import org.models.Cliente;
 import org.models.Evento;
 import org.models.Lugar;
 
 public class Main {
     public static void main(String[] args) {
-         Asiento asiento = new Asiento();
+        Cliente cliente = new Cliente();
 
-        // Crear un asiento
-        asiento.crearAsiento("5000", "5000", "A", "2", 50000, 0.1, "vip", "disponible", "9");
+//        // Crear un cliente
+//        cliente.crearCliente("500", "Juan Pérez", "juan@example.com", "123456789", "Calle Falsa 123");
 
-        // Modificar un asiento
-        asiento.modificarAsiento("5000", "5000", "B", "2", 60000, 0.1, "palco", "vendido", "9");
+//        // Leer un cliente
+//        cliente.leerCliente("500");
 
-//        // Eliminar un asiento
-//        asiento.eliminarAsiento("5000");
+        // Eliminar un cliente
+        cliente.eliminarCliente("500");
+
 
         // Cerrar la conexión al final del programa
         ConexionPostgres.closeConnection();
