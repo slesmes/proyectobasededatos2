@@ -1385,7 +1385,11 @@ CREATE OR REPLACE PROCEDURE proyecto.leer_cliente(
 )
 LANGUAGE plpgsql AS $$
 BEGIN
+<<<<<<< HEAD
     RAISE NOTICE 'Cliente: %', (SELECT row_to_json(cliente) FROM proyecto.cliente WHERE id = p_id);
+=======
+    RAISE NOTICE 'Cliente: %', (SELECT row_to_json(cliente) FROM cliente WHERE id = p_id);
+>>>>>>> b42c72ae3958e852a0068311d145f27812d532b9
 EXCEPTION
     WHEN no_data_found THEN
         RAISE NOTICE 'No se encontró un cliente con el ID %', p_id;
@@ -1502,4 +1506,8 @@ $$;
 
 call eliminar_total_del_xml ('FAC-2');
 
+<<<<<<< HEAD
 select * from factura f ;
+=======
+select * from factura f ;
+>>>>>>> b42c72ae3958e852a0068311d145f27812d532b9
